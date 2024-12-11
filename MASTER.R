@@ -45,7 +45,7 @@
       wd <- if(!dir.exists(wd)){choose.dir()}else{wd}
       rproj.dir <- if(!dir.exists(rproj.dir)){choose.dir()}else{rproj.dir}
   
-    #Source Tables Directory (raw data, configs, etc.)
+    # Source Tables Directory (raw data, configs, etc.)
       source.tables.dir <- paste0(wd, "\\NW OSF Human Impact DB\\Agriculture\\Multi-model aggregation (Jonas)")
       if(dir.exists(source.tables.dir)){ 
         print("source.tables.dir exists.")
@@ -90,8 +90,7 @@
         variable %>% 
         as.character %>% 
         str_extract(., "(?<=_)[^_]*$") %>%
-        as.numeric,
-      
+        as.numeric,  
     ) %>%
     select(-variable) %>%
     as_tibble
