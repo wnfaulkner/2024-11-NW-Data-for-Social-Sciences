@@ -47,6 +47,7 @@
   
     #Source Tables Directory (raw data, configs, etc.)
       source.tables.dir <- paste0(wd, "\\1. Source Data")
+
       if(dir.exists(source.tables.dir)){ 
         print("source.tables.dir exists.")
       }else{
@@ -153,8 +154,7 @@
         variable %>% 
         as.character %>% 
         str_extract(., "(?<=_)[^_]*$") %>%
-        as.numeric,
-      
+        as.numeric,  
     ) %>%
     select(-variable) %>%
     as_tibble
