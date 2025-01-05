@@ -46,7 +46,7 @@
       rproj.dir <- if(!dir.exists(rproj.dir)){choose.dir()}else{rproj.dir}
   
     #Source Tables Directory (raw data, configs, etc.)
-      source.tables.dir <- paste0(wd, "\\NW OSF Human Impact DB\\Agriculture\\Multi-model aggregation (Jonas)")
+      source.tables.dir <- paste0(wd, "\\1. Source Data")
       if(dir.exists(source.tables.dir)){ 
         print("source.tables.dir exists.")
       }else{
@@ -57,16 +57,79 @@
   # LOAD LIBRARIES/PACKAGES
     library(wnf.utils)
     LoadCommonPackages()
+    library(googledrive)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
     section0.duration
     
 # 1-IMPORT --------------------------------------------------------------------------------
-
-  setwd(source.tables.dir)
-  import.filename <- "Bardeen_5Tg_maize_production_change_country_yr1-15_multi_model_mean_2022-08-22.csv"
-  data.tb <- read.csv(import.filename) %>% as_tibble
+  
+  # IMPORT CONFIG TABLES
+    
+    gs4_auth(email = "william@fluxrme.com")
+    
+    sheet.id = "https://docs.google.com/spreadsheets/d/1M9o6hIX9R8f44-UGea09Z27yhNhK340efd6Udgwrnl8/"
+        
+    configs.ss <-
+      as_sheets_id(sheet.id)
+      
+    sheet.names.v <- sheet_names(configs.ss)
+     
+    all.configs.ls <-
+      lapply(
+        sheet.names.v, 
+        function(x){
+          read_sheet(configs.ss, sheet = x)
+        }
+      )
+     
+    names(all.configs.ls) <- sheet.names.v
+     
+    #Assign each table to its own tibble object
+      ListToTibbleObjects(all.configs.ls) #Converts list elements to separate tibble objects names with
+                                           #their respective sheet names with ".tb" appended
+     
+    #Extract global configs from tibble as their own character objects
+      #TibbleToCharObjects(
+      #   tibble = config.global.tb,
+      #   object.names.colname = "config.name",
+      #   object.values.colname = "config.value"
+      # )
+     
+    
+  # IMPORT SOURCE DATA
+  
+    source.data.folder.id <- "16TJ2HhbdUzSEFatsTsOvtN3gYkM4eZDQ"
+    import.files.tb <- 
+      drive_ls(path = as_id(source.data.folder.id)) %>%
+      mutate(mimeType = map_chr(drive_resource, "mimeType")) %>%
+      filter(mimeType == "application/vnd.google-apps.spreadsheet") #%>%
+      #select(id) %>%
+      #unlist %>% as.vector
+    
+    i=1
+    #for(i in 1:nrow(import.files.tb)){ # Start of loop i by imported file (Google Sheet)
+      
+      file.id.i <- import.files.tb$id[i] %>% as_sheets_id(.)
+      sheet.names.i <- sheet_names(file.id.i)
+      configs.i <- source.table.configs.tb %>% filter(file.name == import.files.tb[i]$name)
+      
+      import.tables.ls <- 
+        lapply(
+          sheet.names.i, 
+          function(x){
+            read_sheet(file.id.i, sheet = x)
+          }
+        )
+      
+    #} # End of loop i by imported file (Google Sheet)
+    
+############
+    #setwd(source.tables.dir)
+    #import.filename <- "Bardeen_5Tg_maize_production_change_country_yr1-15_multi_model_mean_2022-08-22.csv"
+    #data.tb <- read.csv(import.filename) %>% as_tibble
+###########
     
 # 2-Cleaning --------------------------------------------------------------------------------
   
@@ -126,6 +189,10 @@
   #Store File
     setwd(output.dir)
     write.csv(data.tb, output.csv.filename)
+    
+  # CODE CLOCKING
+    code.duration <- Sys.time() - code.starttime
+    code.duration
   
     
     
