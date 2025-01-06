@@ -109,12 +109,13 @@
       #select(id) %>%
       #unlist %>% as.vector
     
-    i=1
-    #for(i in 1:nrow(import.files.tb)){ # Start of loop i by imported file (Google Sheet)
+    #i=1
+    for(i in 1:nrow(import.files.tb)){ # Start of loop i by imported file (Google Sheet)
       
       file.id.i <- import.files.tb$id[i] %>% as_sheets_id(.)
       sheet.names.i <- sheet_names(file.id.i)
       configs.i <- source.table.configs.tb %>% filter(file.name == import.files.tb[i]$name)
+      list.name.i <- configs.i$table.name %>% paste0(., ".ls", collapse = "")
       
       import.tables.ls <- 
         lapply(
@@ -124,42 +125,76 @@
           }
         )
       
-    #} # End of loop i by imported file (Google Sheet)
+      assign(list.name.i, import.tables.ls)
+      print(list.name.i)
+      
+    } # End of loop i by imported file (Google Sheet)
     
-############
     #setwd(source.tables.dir)
     #import.filename <- "Bardeen_5Tg_maize_production_change_country_yr1-15_multi_model_mean_2022-08-22.csv"
     #data.tb <- read.csv(import.filename) %>% as_tibble
-###########
+
     
-# 2-Cleaning --------------------------------------------------------------------------------
+# 2-CLEANING & RESHAPING --------------------------------------------------------------------------------
   
-  names(data.tb) %<>% tolower
-  
-# 3-Reshaping --------------------------------------------------------------------------------
-  
-  crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
+  #1. TEMPERATURE
+    
+  #2. PRECIPITATION
+    
+  #3. UV
+    
+  #4. AGRICULTURE
+    #names(data.tb) %<>% tolower
+    #crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
     #ifelse(
     #  strsplit(., "_") %>% unlist %>% length %>% is_weakly_greater_than(3),
     #  strsplit(., "_") %>% unlist %>% .[3]
     #)
+    
+    #data.tb %<>%
+    #  select(-x) %>%
+    #  melt(., id = c("country_name", "country_iso3")) %>%
+    #  mutate(
+    #    ., 
+    #    crop = crop.i,
+    #    year = 
+    #      variable %>% 
+    #      as.character %>% 
+    #      str_extract(., "(?<=_)[^_]*$") %>%
+    #      as.numeric,  
+    #  ) %>%
+    #  select(-variable) %>%
+    #  as_tibble
   
-  data.tb %<>%
-    select(-x) %>%
-    melt(., id = c("country_name", "country_iso3")) %>%
-    mutate(
-      ., 
-      crop = crop.i,
-      year = 
-        variable %>% 
-        as.character %>% 
-        str_extract(., "(?<=_)[^_]*$") %>%
-        as.numeric,  
+  #5. FISHERIES
+    
+  #6. SEA ICE
+    #dat <- sea.ice.ls[[2]]
+    clean.reshape.sea.ice <- 
+      function(x){
+        scenario <- names(x)[1] %>% str_extract(., "(?<=-)(\\d+\\.?\\d*)(?=Tg)")
+        
+        x %<>%
+          .[-1,] %>%
+          ReplaceNames(., names(x)[1], "port") %>%
+          melt(
+            .,
+            id = "port"
+          ) %>%
+          ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
+          mutate(month = as.character(month) %>% gsub("\\.","",.) %>% as.numeric) %>%
+          mutate(scenario = scenario) %>%
+          as_tibble
+      }
+    
+    lapply(
+      sea.ice.ls,
+      clean.reshape.sea.ice
     ) %>%
-    select(-variable) %>%
-    as_tibble
+    do.call(rbind, .) %>%
+    as_tibble()
   
-# 4-Export --------------------------------------------------------------------------------
+# 4-EXPORT --------------------------------------------------------------------------------
   
   setwd(wd)
   
