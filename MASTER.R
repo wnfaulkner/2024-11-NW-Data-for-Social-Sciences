@@ -66,7 +66,7 @@
     
 # 1-IMPORT --------------------------------------------------------------------------------
   
-  # IMPORT CONFIG TABLES
+  # IMPORT CONFIG TABLES ----
     
     gs4_auth(email = "william@fluxrme.com")
     
@@ -99,51 +99,95 @@
       # )
      
     
-  # IMPORT SOURCE DATA
+  # IMPORT SOURCE DATA (defining function only) ----
   
     source.data.folder.id <- "16TJ2HhbdUzSEFatsTsOvtN3gYkM4eZDQ"
     import.files.tb <- 
       drive_ls(path = as_id(source.data.folder.id)) %>%
       mutate(mimeType = map_chr(drive_resource, "mimeType")) %>%
-      filter(mimeType == "application/vnd.google-apps.spreadsheet") #%>%
-      #select(id) %>%
-      #unlist %>% as.vector
+      filter(mimeType == "application/vnd.google-apps.spreadsheet") 
+      
+    ImportSourceData <- 
+      function(name_of_file_to_be_imported){
+        
+        #name_of_file_to_be_imported <- "3. UV"
+        
+        file.id <- 
+          import.files.tb %>% 
+          filter(name == name_of_file_to_be_imported) %>% 
+          select(id) %>%
+          unlist %>% as.vector() %>%
+          as_sheets_id(.)
+        
+        sheet.names <- sheet_names(file.id)
+        
+        if( #if there is no row in source.table.configs with a name matching this table, skip & print error; otherwise, proceed
+          source.table.configs.tb %>% filter(file.name == name_of_file_to_be_imported) %>% length %>% is_less_than(1)
+        ){
+          print("NO ROW IN CONFIGS TABLE WITH CORRESPONDING FILE NAME.")
+          print(paste("File Name: ", import.files.tb[i,]$name, sep = ""))
+          print("Configs Table File Names: ")
+          print(paste0(source.table.configs.tb$file.name, collapse = ", "))
+          next()
+        }else{}
+        
+        configs <- source.table.configs.tb %>% filter(file.name == name_of_file_to_be_imported)
+        list.name <- configs$table.name %>% paste0(., ".ls", collapse = "")
+        
+        import.tables.ls <- 
+          lapply(
+            sheet.names, 
+            function(x){
+              read_sheet(file.id, sheet = x)
+            }
+          )
+        
+        names(import.tables.ls) <- sheet.names #assign sheet names as list element names
+        
+        assign(list.name, import.tables.ls, envir = .GlobalEnv) #create a list of the imported tables in the global environment
+        print(list.name)
+        
+      } # End of function definition for ImportSourceData
     
-    #i=1
-    for(i in 1:nrow(import.files.tb)){ # Start of loop i by imported file (Google Sheet)
-      
-      file.id.i <- import.files.tb$id[i] %>% as_sheets_id(.)
-      sheet.names.i <- sheet_names(file.id.i)
-      configs.i <- source.table.configs.tb %>% filter(file.name == import.files.tb[i]$name)
-      list.name.i <- configs.i$table.name %>% paste0(., ".ls", collapse = "")
-      
-      import.tables.ls <- 
-        lapply(
-          sheet.names.i, 
-          function(x){
-            read_sheet(file.id.i, sheet = x)
-          }
-        )
-      
-      assign(list.name.i, import.tables.ls)
-      print(list.name.i)
-      
-    } # End of loop i by imported file (Google Sheet)
-    
-    #setwd(source.tables.dir)
-    #import.filename <- "Bardeen_5Tg_maize_production_change_country_yr1-15_multi_model_mean_2022-08-22.csv"
-    #data.tb <- read.csv(import.filename) %>% as_tibble
-
     
 # 2-CLEANING & RESHAPING --------------------------------------------------------------------------------
   
-  #1. TEMPERATURE
+  #1. TEMPERATURE ----
     
-  #2. PRECIPITATION
+  #2. PRECIPITATION ----
     
-  #3. UV
+  #3. UV ----
+    ImportSourceData("3. UV")
     
-  #4. AGRICULTURE
+    #CleanReshape_UV <- 
+    #  function(x){
+    
+    #####################################################################################
+    
+        scenario <- names(x)[1]
+        
+        x %<>%
+          .[-1,] %>%
+          ReplaceNames(., names(x)[1], "port") %>%
+          melt(
+            .,
+            id = "port"
+          ) %>%
+          ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
+          mutate(month = as.character(month) %>% gsub("\\.","",.) %>% as.numeric) %>%
+          mutate(scenario = scenario) %>%
+          as_tibble
+      }
+    
+    lapply(
+      uv.ls,
+      CleanReshape_UV
+    ) %>%
+    do.call(rbind, .) %>%
+    as_tibble()
+    
+  #4. AGRICULTURE ----
+    
     #names(data.tb) %<>% tolower
     #crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
     #ifelse(
@@ -166,13 +210,16 @@
     #  select(-variable) %>%
     #  as_tibble
   
-  #5. FISHERIES
+  #5. FISHERIES ----
     
-  #6. SEA ICE
+  #6. SEA ICE ----
+    
+    ImportSourceData("6. Sea Ice")
+    
     #dat <- sea.ice.ls[[2]]
-    clean.reshape.sea.ice <- 
+    CleanReshape_SeaIce <- 
       function(x){
-        scenario <- names(x)[1] %>% str_extract(., "(?<=-)(\\d+\\.?\\d*)(?=Tg)")
+        scenario <- names(x)[1]
         
         x %<>%
           .[-1,] %>%
@@ -187,15 +234,18 @@
           as_tibble
       }
     
-    lapply(
-      sea.ice.ls,
-      clean.reshape.sea.ice
-    ) %>%
-    do.call(rbind, .) %>%
-    as_tibble()
+    sea.ice.clean.tb <-
+      lapply(
+        sea.ice.ls,
+        CleanReshape_SeaIce
+      ) %>%
+      do.call(rbind, .) %>%
+      as_tibble()
   
 # 4-EXPORT --------------------------------------------------------------------------------
   
+  ExportCSVs <- function
+    
   setwd(wd)
   
   #Define/Create Output Directory
