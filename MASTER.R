@@ -159,32 +159,52 @@
   #3. UV ----
     ImportSourceData("3. UV")
     
-    #CleanReshape_UV <- 
-    #  function(x){
+    #source_table_list <- uv.ls
+    #source_table_names <- uv.ls %>% names
     
-    #####################################################################################
-    
-        scenario <- names(x)[1]
+    CleanReshape_UV <- 
+      function(source_table_list, source_table_names){
+
+        scenario <- 
+          source_table_names %>%
+          strsplit(., "_") %>% 
+          unlist %>%
+          .[1] %>%
+          ifelse(. != "control", paste(., "Tg", sep=""), .)
         
-        x %<>%
-          .[-1,] %>%
-          ReplaceNames(., names(x)[1], "port") %>%
-          melt(
-            .,
-            id = "port"
+        measure <- 
+          source_table_names %>%
+          strsplit(., "_") %>% 
+          unlist %>%
+          .[2]
+        
+        result <- 
+          source_table_list %>% 
+          ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
+          ReplaceNames(., c("id", "nation"), c("country.id","country.name")) %>%  #standardize geographic variable names
+          mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into numeric
+          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          mutate(
+            scenario = scenario,  #add scenario variable
+            variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
+            year = str_extract(variable, "^[^ ]+"),  #create year variable
+            month = str_extract(variable, "(?<= - ).*"),  #create month variable
+            measure = measure
           ) %>%
-          ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
-          mutate(month = as.character(month) %>% gsub("\\.","",.) %>% as.numeric) %>%
-          mutate(scenario = scenario) %>%
-          as_tibble
+          select(country.id, country.name, scenario, year, month, measure, value) %>%
+          as_tibble                                                       #ensure final result is a tibble
+        
+        return(result)
       }
     
-    lapply(
-      uv.ls,
-      CleanReshape_UV
-    ) %>%
-    do.call(rbind, .) %>%
-    as_tibble()
+    uv.clean.tb <-
+      Map(
+          CleanReshape_UV,
+          uv.ls,
+          names(uv.ls)
+      ) %>%
+      do.call(rbind, .) %>%
+      as_tibble()
     
   #4. AGRICULTURE ----
     
