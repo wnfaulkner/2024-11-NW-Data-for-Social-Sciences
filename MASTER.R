@@ -59,6 +59,7 @@
     library(wnf.utils)
     LoadCommonPackages()
     library(googledrive)
+    library(purrr)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
@@ -189,10 +190,10 @@
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
             year = str_extract(variable, "^[^ ]+"),  #create year variable
             month = str_extract(variable, "(?<= - ).*"),  #create month variable
-            measure = measure
+            measure = measure  #create measure variable that tells us which measure of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
           ) %>%
-          select(country.id, country.name, scenario, year, month, measure, value) %>%
-          as_tibble                                                       #ensure final result is a tibble
+          select(country.id, country.name, scenario, year, month, measure, value) %>% #select & order final variables
+          as_tibble  #ensure final result is a tibble
         
         return(result)
       }
@@ -207,6 +208,8 @@
       as_tibble()
     
   #4. AGRICULTURE ----
+    
+    #ImportSourceData("4. Agriculture")
     
     #names(data.tb) %<>% tolower
     #crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
@@ -236,22 +239,33 @@
     
     ImportSourceData("6. Sea Ice")
     
-    #dat <- sea.ice.ls[[2]]
+    #source_table <- sea.ice.ls[[2]] # for testing
     CleanReshape_SeaIce <- 
-      function(x){
-        scenario <- names(x)[1]
+      function(source_table){
+        scenario <- names(source_table)[1] %>% str_extract(., "(?<=NW-).*")
         
-        x %<>%
+        result <-
+          source_table %>%
           .[-1,] %>%
-          ReplaceNames(., names(x)[1], "port") %>%
+          ReplaceNames(., names(source_table)[1], "port") %>%
           melt(
             .,
             id = "port"
           ) %>%
           ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
-          mutate(month = as.character(month) %>% gsub("\\.","",.) %>% as.numeric) %>%
-          mutate(scenario = scenario) %>%
+          mutate(
+            months_elapsed = as.character(month) %>% gsub("\\.", "", .) %>% as.numeric %>% subtract(1),  # Clean and convert month strings
+            month = (months_elapsed - 1) %% 12 + 1,                                     # Calculate the month (1-12)
+            years_elapsed = (months_elapsed - 1) %/% 12                                 # Calculate the year (0, 1, 2, ...)
+          ) %>%
+          mutate(
+            scenario = scenario,
+            measure = "avg. thickness (m)"
+          ) %>%
+          select(port,scenario, month, months_elapsed, years_elapsed, sea.ice.thickness.meters) %>%
           as_tibble
+        
+        return(result)
       }
     
     sea.ice.clean.tb <-
@@ -264,20 +278,36 @@
   
 # 4-EXPORT --------------------------------------------------------------------------------
   
-  ExportCSVs <- function
+  # CREATE FINAL LIST OF CLEANED & REFORMATTED TABLES FOR EXPORT
     
-  setwd(wd)
+    clean_object_names <- 
+        c("temperature.clean.tb","precipitation.clean.tb","uv.clean.tb","agriculture.clean.tb","fisheries.clean.tb","sea.ice.clean.tb")
+    clean_table_names <- 
+      c("1.temperature","2.precipitation","3.uv","4.agriculture","5.fisheries","6.sea.ice")
+    
+    export.ls <- 
+      lapply(
+        clean_object_names, 
+        function(x) {
+          if (exists(x)) get(x) else NULL
+        }
+      ) %>%
+      purrr::compact() # Remove NULL entries for non-existent tibbles
+    
+    names(export.ls) <- clean_table_names[clean_object_names %in% ls()]
   
-  #Define/Create Output Directory
+  # DEFINE & CREATE OUTPUT DIRECTORY
+    
+    #setwd(paste(wd, "\\2. Reformatted Source Data", sep=""))
+    
     output.base.name <- 
       Sys.time() %>% 
-      gsub(":",".",.) #%>% 
-      #paste("output ", ., sep = "")
+      gsub(":",".",.) 
       
     output.dir <-
       paste(
         wd,
-        "\\Reformatted Data Outputs\\",
+        "\\2. Reformatted Source Data\\",
         output.base.name,
         "\\",
         sep = ""
@@ -287,27 +317,21 @@
       dir.create(output.dir, recursive = TRUE)
     }
     
-  #Define Output Filename
-    output.csv.filename <- 
-      paste("output_", output.base.name, ".csv", sep = "")
+  # WRITE CSV FILES INTO OUTPUT DIRECTORY
     
-  #Store File
+    ExportCsvs <- 
+      function(table, table_name){
+        file.name <- paste(table_name,output.base.name,".csv",sep="")
+        write.csv(table, file.name, row.names = FALSE, na = "")
+      }
+    
     setwd(output.dir)
-    write.csv(data.tb, output.csv.filename)
-    
+    Map(
+      ExportCsvs,
+      export.ls,
+      names(export.ls)
+    )
+
   # CODE CLOCKING
     code.duration <- Sys.time() - code.starttime
     code.duration
-  
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
