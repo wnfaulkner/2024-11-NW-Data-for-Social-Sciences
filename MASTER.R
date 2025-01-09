@@ -157,10 +157,8 @@
   #2. PRECIPITATION ----
     
   #3. UV ----
-    ImportSourceData("3. UV")
     
-    #source_table_list <- uv.ls
-    #source_table_names <- uv.ls %>% names
+    ImportSourceData("3. UV")
     
     CleanReshape_UV <- 
       function(source_table_list, source_table_names){
@@ -193,6 +191,8 @@
           ) %>%
           select(country.id, country.name, scenario, year, month, measure, value) %>% #select & order final variables
           as_tibble  #ensure final result is a tibble
+        
+        print(source_table_names)
         
         return(result)
       }
@@ -230,43 +230,33 @@
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
           ReplaceNames(., c("nation-id", "nation-name"), c("country.id","country.name")) %>%  #standardize geographic variable names
           select(-id) %>%
-          #mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into numeric
           melt(., id = c("country.id","country.name")) %>% #reshape to long
-          #mutate(
-          as_tibble
+          mutate( #add/rename variables
+            scenario = variable,
+            crop = crop,
+            years_elapsed = years_elapsed,
+            pct.change.harvest.mass = value
+          ) %>%
+          select(country.id, country.name, scenario, crop, years_elapsed, pct.change.harvest.mass) %>% #select & order final variables
+          as_tibble #ensure final result is a tibble
         
+        print(source_table_names)
         
+        return(result)
       }
     
-    #agriculture.clm.clean.tb <-
+    agriculture.clm.clean.tb <- #create final cleaned & compiled data table
       Map(
         CleanReshape_AgricultureCLM,
-        agriculture.clm.ls[1:2],
-        names(agriculture.clm.ls)[1:2]
+        agriculture.clm.ls,
+        names(agriculture.clm.ls)
       ) %>%
       do.call(rbind, .) %>%
       as_tibble()
-    #names(data.tb) %<>% tolower
-    #crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
-    #ifelse(
-    #  strsplit(., "_") %>% unlist %>% length %>% is_weakly_greater_than(3),
-    #  strsplit(., "_") %>% unlist %>% .[3]
-    #)
     
-    #data.tb %<>%
-    #  select(-x) %>%
-    #  melt(., id = c("country_name", "country_iso3")) %>%
-    #  mutate(
-    #    ., 
-    #    crop = crop.i,
-    #    year = 
-    #      variable %>% 
-    #      as.character %>% 
-    #      str_extract(., "(?<=_)[^_]*$") %>%
-    #      as.numeric,  
-    #  ) %>%
-    #  select(-variable) %>%
-    #  as_tibble
+    agriculture.clm.clean.tb %>% 
+      select(-pct.change.harvest.mass) %>% 
+      apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
   
   #5. FISHERIES ----
     
