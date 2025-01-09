@@ -111,8 +111,6 @@
     ImportSourceData <- 
       function(name_of_file_to_be_imported){
         
-        #name_of_file_to_be_imported <- "3. UV"
-        
         file.id <- 
           import.files.tb %>% 
           filter(name == name_of_file_to_be_imported) %>% 
@@ -260,36 +258,51 @@
     
   #4b. AGRICULTURE MMA (Muli-Model Aggregates, Jonas) ----
     
-    ImportSourceData("4. Agriculture_MMA")
+    ImportSourceData("4b. Agriculture MMA")
     
     CleanReshape_AgricultureMMA <- 
       function(source_table_list, source_table_names){
         
-        crop <- 
+        climate.model <- 
           source_table_names %>%
-          strsplit(., "-") %>% 
+          strsplit(., "_") %>% 
           unlist %>%
           .[1]
         
-        years_elapsed <- 
+        scenario <- 
           source_table_names %>%
-          strsplit(., "-") %>% 
+          strsplit(., "_") %>% 
           unlist %>%
           .[2]
+        
+        crop <- 
+          source_table_names %>%
+          strsplit(., "_") %>% 
+          unlist %>%
+          .[3]
+        
+        measure <- "% change in harvest yield (tons/hectare)"
         
         result <- 
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
-          ReplaceNames(., c("nation-id", "nation-name"), c("country.id","country.name")) %>%  #standardize geographic variable names
-          select(-id) %>%
-          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          ReplaceNames(., c("...1","country_name", "country_iso3"), c("country.id","country.name","country.abbrev.iso3")) %>%  #standardize geographic variable names
+          mutate(across(where(is.list), ~ suppressWarnings(as.character(unlist(.))))) %>% #convert all list variables into character
+          melt(., id = c("country.id","country.name", "country.abbrev.iso3")) %>% #reshape to long
           mutate( #add/rename variables
-            scenario = variable,
+            climate.model = climate.model,
+            scenario = scenario,
             crop = crop,
-            years_elapsed = years_elapsed,
-            pct.change.harvest.mass = value
+            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$"),
+            measure = measure,
+            pct.change.harvest.yield = value %>% as.numeric %>% suppressWarnings()
           ) %>%
-          select(country.id, country.name, scenario, crop, years_elapsed, pct.change.harvest.mass) %>% #select & order final variables
+          select( #select & order final variables
+            climate.model, scenario, 
+            country.id, country.name, country.abbrev.iso3, 
+            years_elapsed, 
+            crop, measure, pct.change.harvest.yield
+          ) %>% 
           as_tibble #ensure final result is a tibble
         
         print(source_table_names)
@@ -306,8 +319,8 @@
       do.call(rbind, .) %>%
       as_tibble()
     
-    agriculture.clm.clean.tb %>% 
-      select(-pct.change.harvest.mass) %>% 
+    agriculture.mma.clean.tb %>% 
+      select(-names(.)[length(names(.))]) %>% 
       apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
     
   #5. FISHERIES ----
@@ -319,6 +332,7 @@
     #source_table <- sea.ice.ls[[2]] # for testing
     CleanReshape_SeaIce <- 
       function(source_table){
+        
         scenario <- names(source_table)[1] %>% str_extract(., "(?<=NW-).*")
         
         result <-
@@ -339,7 +353,7 @@
             scenario = scenario,
             measure = "avg. thickness (m)"
           ) %>%
-          select(port,scenario, month, months_elapsed, years_elapsed, sea.ice.thickness.meters) %>%
+          select(port,scenario, month, months_elapsed, years_elapsed, measure, sea.ice.thickness.meters) %>%
           as_tibble
         
         return(result)
