@@ -206,7 +206,7 @@
       do.call(rbind, .) %>%
       as_tibble()
     
-  #4. AGRICULTURE ----
+  #4a. AGRICULTURE CLM (Community Land Model, Lili) ----
     
     ImportSourceData("4. Agriculture_CLM")
     
@@ -257,7 +257,59 @@
     agriculture.clm.clean.tb %>% 
       select(-pct.change.harvest.mass) %>% 
       apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
-  
+    
+  #4b. AGRICULTURE MMA (Muli-Model Aggregates, Jonas) ----
+    
+    ImportSourceData("4. Agriculture_MMA")
+    
+    CleanReshape_AgricultureMMA <- 
+      function(source_table_list, source_table_names){
+        
+        crop <- 
+          source_table_names %>%
+          strsplit(., "-") %>% 
+          unlist %>%
+          .[1]
+        
+        years_elapsed <- 
+          source_table_names %>%
+          strsplit(., "-") %>% 
+          unlist %>%
+          .[2]
+        
+        result <- 
+          source_table_list %>% 
+          ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
+          ReplaceNames(., c("nation-id", "nation-name"), c("country.id","country.name")) %>%  #standardize geographic variable names
+          select(-id) %>%
+          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          mutate( #add/rename variables
+            scenario = variable,
+            crop = crop,
+            years_elapsed = years_elapsed,
+            pct.change.harvest.mass = value
+          ) %>%
+          select(country.id, country.name, scenario, crop, years_elapsed, pct.change.harvest.mass) %>% #select & order final variables
+          as_tibble #ensure final result is a tibble
+        
+        print(source_table_names)
+        
+        return(result)
+      }
+    
+    agriculture.mma.clean.tb <- #create final cleaned & compiled data table
+      Map(
+        CleanReshape_AgricultureMMA,
+        agriculture.mma.ls,
+        names(agriculture.mma.ls)
+      ) %>%
+      do.call(rbind, .) %>%
+      as_tibble()
+    
+    agriculture.clm.clean.tb %>% 
+      select(-pct.change.harvest.mass) %>% 
+      apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
+    
   #5. FISHERIES ----
     
   #6. SEA ICE ----
@@ -306,9 +358,26 @@
   # CREATE FINAL LIST OF CLEANED & REFORMATTED TABLES FOR EXPORT
     
     clean_object_names <- 
-        c("temperature.clean.tb","precipitation.clean.tb","uv.clean.tb","agriculture.clean.tb","fisheries.clean.tb","sea.ice.clean.tb")
+      c(
+        "temperature.clean.tb",
+        "precipitation.clean.tb",
+        "uv.clean.tb",
+        "agriculture.clm.clean.tb",
+        "agriculture.mma.clean.tb",
+        "fisheries.clean.tb",
+        "sea.ice.clean.tb"
+      )
+    
     clean_table_names <- 
-      c("1.temperature","2.precipitation","3.uv","4.agriculture","5.fisheries","6.sea.ice")
+      c(
+        "1.temperature",
+        "2.precipitation",
+        "3.uv",
+        "4a.agriculture.clm",
+        "4b.agriculture.mma",
+        "5.fisheries",
+        "6.sea.ice"
+      )
     
     export.ls <- 
       lapply(
