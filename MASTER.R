@@ -150,7 +150,6 @@
         
       } # End of function definition for ImportSourceData
     
-    
 # 2-CLEANING & RESHAPING --------------------------------------------------------------------------------
   
   #1. TEMPERATURE ----
@@ -209,8 +208,44 @@
     
   #4. AGRICULTURE ----
     
-    #ImportSourceData("4. Agriculture")
+    ImportSourceData("4. Agriculture_CLM")
     
+    CleanReshape_AgricultureCLM <- 
+      function(source_table_list, source_table_names){
+        
+        crop <- 
+          source_table_names %>%
+          strsplit(., "-") %>% 
+          unlist %>%
+          .[1]
+        
+        years_elapsed <- 
+          source_table_names %>%
+          strsplit(., "-") %>% 
+          unlist %>%
+          .[2]
+        
+        result <- 
+          source_table_list %>% 
+          ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
+          ReplaceNames(., c("nation-id", "nation-name"), c("country.id","country.name")) %>%  #standardize geographic variable names
+          select(-id) %>%
+          #mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into numeric
+          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          #mutate(
+          as_tibble
+        
+        
+      }
+    
+    #agriculture.clm.clean.tb <-
+      Map(
+        CleanReshape_AgricultureCLM,
+        agriculture.clm.ls[1:2],
+        names(agriculture.clm.ls)[1:2]
+      ) %>%
+      do.call(rbind, .) %>%
+      as_tibble()
     #names(data.tb) %<>% tolower
     #crop.i <- import.filename %>% strsplit(., "_") %>% unlist %>% .[3]
     #ifelse(
@@ -333,5 +368,5 @@
     )
 
   # CODE CLOCKING
-    code.duration <- Sys.time() - code.starttime
+    code.duration <- Sys.time() - sections.all.starttime
     code.duration
