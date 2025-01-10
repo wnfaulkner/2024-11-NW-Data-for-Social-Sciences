@@ -168,12 +168,6 @@
           .[1] %>%
           ifelse(. != "control", paste(., "Tg", sep=""), .)
         
-        measure <- 
-          source_table_names %>%
-          strsplit(., "_") %>% 
-          unlist %>%
-          .[2]
-        
         result <- 
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
@@ -185,9 +179,10 @@
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
             year = str_extract(variable, "^[^ ]+"),  #create year variable
             month = str_extract(variable, "(?<= - ).*"),  #create month variable
-            measure = measure  #create measure variable that tells us which measure of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
+            indicator = indicator %>%  #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
+              recode(., 
           ) %>%
-          select(country.id, country.name, scenario, year, month, measure, value) %>% #select & order final variables
+          select(country.id, country.name, scenario, year, month, indicator, value) %>% #select & order final variables
           as_tibble  #ensure final result is a tibble
         
         print(source_table_names)
@@ -254,7 +249,7 @@
     
     agriculture.clm.clean.tb %>% 
       select(-pct.change.harvest.mass) %>% 
-      apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
+      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
   #4b. AGRICULTURE MMA (Muli-Model Aggregates, Jonas) ----
     
@@ -281,7 +276,7 @@
           unlist %>%
           .[3]
         
-        measure <- "% change in harvest yield (tons/hectare)"
+        indicator <- "% change in harvest yield (tons/hectare)"
         
         result <- 
           source_table_list %>% 
@@ -294,14 +289,14 @@
             scenario = scenario,
             crop = crop,
             years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$"),
-            measure = measure,
+            indicator = indicator,
             pct.change.harvest.yield = value %>% as.numeric %>% suppressWarnings()
           ) %>%
           select( #select & order final variables
             climate.model, scenario, 
             country.id, country.name, country.abbrev.iso3, 
             years_elapsed, 
-            crop, measure, pct.change.harvest.yield
+            crop, indicator, pct.change.harvest.yield
           ) %>% 
           as_tibble #ensure final result is a tibble
         
@@ -321,9 +316,78 @@
     
     agriculture.mma.clean.tb %>% 
       select(-names(.)[length(names(.))]) %>% 
-      apply(., 2, TableWithNA) #display unique values for each variable except the measure (for checking)
+      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
   #5. FISHERIES ----
+    
+    ImportSourceData("5. Fisheries")
+    
+    CleanReshape_Fisheries <- 
+      function(source_table_list, source_table_names){
+        
+        climate.model <- ""
+        
+        scenario <- 
+          source_table_names
+        
+        #indicator.definitions <- 
+        #  c(
+        #    diff_mean = "mean change in EEZ catch relative to control simulation",
+        #    diff_std = "standard deviation of the reduction in EEZ catch",
+        #    diff_perc_mean = "mean percent change in EEZ catch relative to control simulation (gram wet biomass)",
+        #    diff_perc_std = "standard deviation of the percent change in EEZ catch (%)",
+        #    ctrl_mean = "mean total EEZ catch (grams wet biomass)",
+        #    ctrl_std = "standard deviation of EEZ catch",
+        #    nw_scenario_mean = "mean total EEZ catch (grams wet biomass)",
+        #    nw_scenario_std = "standard deviation of EEZ catch"
+        #  )
+        
+        result <- 
+          source_table_list %>% 
+          ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
+          mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into character
+          melt(., id = c("eez","eez_no", "eez_area")) %>% #reshape to long
+          mutate( #add/rename variables
+            climate.model = climate.model,
+            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
+            indicator = variable %>% str_extract(., "(?<=_).*?(?=_[^_]*$)"),
+            indicator.definition = recode(indicator, !!!indicator.new.vals),
+            scenario = scenario,
+          ) %>%
+          mutate(
+            scenario = if_else(str_detect(indicator, "ctrl"), "control", scenario),
+          ) %>%
+          dcast(
+            ., 
+            id ~
+          ) %>%
+          select( #select & order final variables
+            climate.model, scenario, 
+            eez, eez_no, eez_area, 
+            years_elapsed, 
+            indicator, indicator.definition, value
+          ) %>% 
+          as_tibble #ensure final result is a tibble
+        
+        print(source_table_names)
+        
+        return(result)
+      }
+    
+    #fisheries.clean.tb <- #create final cleaned & compiled data table
+      Map(
+        CleanReshape_Fisheries,
+        fisheries.ls[1:4],
+        names(fisheries.ls)[1:4]
+      ) %>%
+      do.call(rbind, .) %>%
+      unique %>% #removes duplicated rows because numbers for control simulations are all the same
+      as_tibble() %>%
+      apply(., 2, TableWithNA)
+    
+    fisheries.clean.tb %>% 
+      select(-names(.)[length(names(.))]) %>% 
+      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
   #6. SEA ICE ----
     
@@ -351,9 +415,9 @@
           ) %>%
           mutate(
             scenario = scenario,
-            measure = "avg. thickness (m)"
+            indicator = "avg. thickness (m)"
           ) %>%
-          select(port,scenario, month, months_elapsed, years_elapsed, measure, sea.ice.thickness.meters) %>%
+          select(port,scenario, month, months_elapsed, years_elapsed, indicator, sea.ice.thickness.meters) %>%
           as_tibble
         
         return(result)
