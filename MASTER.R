@@ -120,18 +120,7 @@
         
         sheet.names <- sheet_names(file.id)
         
-        if( #if there is no row in source.table.configs with a name matching this table, skip & print error; otherwise, proceed
-          source.table.configs.tb %>% filter(file.name == name_of_file_to_be_imported) %>% length %>% is_less_than(1)
-        ){
-          print("NO ROW IN CONFIGS TABLE WITH CORRESPONDING FILE NAME.")
-          print(paste("File Name: ", import.files.tb[i,]$name, sep = ""))
-          print("Configs Table File Names: ")
-          print(paste0(source.table.configs.tb$file.name, collapse = ", "))
-          next()
-        }else{}
-        
         configs <- source.table.configs.tb %>% filter(file.name == name_of_file_to_be_imported)
-        list.name <- configs$table.name %>% paste0(., ".ls", collapse = "")
         
         import.tables.ls <- 
           lapply(
@@ -143,6 +132,7 @@
         
         names(import.tables.ls) <- sheet.names #assign sheet names as list element names
         
+        list.name <- configs$table.name %>% paste0(., ".ls", collapse = "")
         assign(list.name, import.tables.ls, envir = .GlobalEnv) #create a list of the imported tables in the global environment
         print(list.name)
         
@@ -168,6 +158,12 @@
           .[1] %>%
           ifelse(. != "control", paste(., "Tg", sep=""), .)
         
+        indicator <- 
+          source_table_names %>%
+          strsplit(., "_") %>% 
+          unlist %>%
+          .[2]
+        
         result <- 
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
@@ -179,8 +175,7 @@
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
             year = str_extract(variable, "^[^ ]+"),  #create year variable
             month = str_extract(variable, "(?<= - ).*"),  #create month variable
-            indicator = indicator %>%  #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
-              recode(., 
+            indicator = indicator #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
           ) %>%
           select(country.id, country.name, scenario, year, month, indicator, value) %>% #select & order final variables
           as_tibble  #ensure final result is a tibble
@@ -201,7 +196,7 @@
     
   #4a. AGRICULTURE CLM (Community Land Model, Lili) ----
     
-    ImportSourceData("4. Agriculture_CLM")
+    ImportSourceData("4a. Agriculture CLM")
     
     CleanReshape_AgricultureCLM <- 
       function(source_table_list, source_table_names){
@@ -489,7 +484,7 @@
     
     ExportCsvs <- 
       function(table, table_name){
-        file.name <- paste(table_name,output.base.name,".csv",sep="")
+        file.name <- paste(table_name,"_",output.base.name,".csv",sep="")
         write.csv(table, file.name, row.names = FALSE, na = "")
       }
     
