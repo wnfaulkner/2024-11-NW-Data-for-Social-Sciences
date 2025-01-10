@@ -251,7 +251,7 @@
       select(-pct.change.harvest.mass) %>% 
       apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
-  #4b. AGRICULTURE MMA (Muli-Model Aggregates, Jonas) ----
+  #4b. AGRICULTURE MMA (Multi-Model Aggregates, Jonas) ----
     
     ImportSourceData("4b. Agriculture MMA")
     
@@ -330,43 +330,36 @@
         scenario <- 
           source_table_names
         
-        #indicator.definitions <- 
-        #  c(
-        #    diff_mean = "mean change in EEZ catch relative to control simulation",
-        #    diff_std = "standard deviation of the reduction in EEZ catch",
-        #    diff_perc_mean = "mean percent change in EEZ catch relative to control simulation (gram wet biomass)",
-        #    diff_perc_std = "standard deviation of the percent change in EEZ catch (%)",
-        #    ctrl_mean = "mean total EEZ catch (grams wet biomass)",
-        #    ctrl_std = "standard deviation of EEZ catch",
-        #    nw_scenario_mean = "mean total EEZ catch (grams wet biomass)",
-        #    nw_scenario_std = "standard deviation of EEZ catch"
-        #  )
-        
         result <- 
           source_table_list %>% 
+          select(names(.)[!str_detect(names(.), "ctrl")]) %>%
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
           mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into character
           melt(., id = c("eez","eez_no", "eez_area")) %>% #reshape to long
           mutate( #add/rename variables
             climate.model = climate.model,
             years_elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
-            indicator = variable %>% str_extract(., "(?<=_).*?(?=_[^_]*$)"),
-            indicator.definition = recode(indicator, !!!indicator.new.vals),
+            indicator.raw = 
+              variable %>% 
+              str_extract(., "(?<=_).*?(?=_[^_]*$)"),
             scenario = scenario,
           ) %>%
           mutate(
+            indicator = 
+              IndexMatchToVectorFromTibble(
+                indicator.raw, 
+                fisheries.indicators.tb,
+                "extracted.indicator.name.raw",
+                "indicator.name.clean",
+                mult.replacements.per.cell = FALSE
+              ),
             scenario = if_else(str_detect(indicator, "ctrl"), "control", scenario),
           ) %>%
           dcast(
             ., 
-            id ~
+            climate.model + scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
+            value.var = "value"
           ) %>%
-          select( #select & order final variables
-            climate.model, scenario, 
-            eez, eez_no, eez_area, 
-            years_elapsed, 
-            indicator, indicator.definition, value
-          ) %>% 
           as_tibble #ensure final result is a tibble
         
         print(source_table_names)
@@ -374,20 +367,23 @@
         return(result)
       }
     
-    #fisheries.clean.tb <- #create final cleaned & compiled data table
+    fisheries.clean.tb <- #create final cleaned & compiled data table
       Map(
         CleanReshape_Fisheries,
-        fisheries.ls[1:4],
-        names(fisheries.ls)[1:4]
+        fisheries.ls,
+        names(fisheries.ls)
       ) %>%
-      do.call(rbind, .) %>%
-      unique %>% #removes duplicated rows because numbers for control simulations are all the same
-      as_tibble() %>%
-      apply(., 2, TableWithNA)
-    
-    fisheries.clean.tb %>% 
-      select(-names(.)[length(names(.))]) %>% 
-      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
+      bind_rows(.) %>%
+      select( #select & order final variables
+        climate.model, scenario, 
+        eez, eez_no, eez_area, 
+        years_elapsed, 
+        mean.catch, std.dev.catch, 
+        mean.catch.change, std.dev.catch.change,
+        pct.catch.change, std.dev.pct.catch.change
+      ) #%>%
+      #select(climate.model, scenario, eez, eez_no, eez_area,years_elapsed) %>%
+      #apply(., 2, TableWithNA)
     
   #6. SEA ICE ----
     
