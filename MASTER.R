@@ -92,15 +92,8 @@
       ListToTibbleObjects(all.configs.ls) #Converts list elements to separate tibble objects names with
                                            #their respective sheet names with ".tb" appended
      
-    #Extract global configs from tibble as their own character objects
-      #TibbleToCharObjects(
-      #   tibble = config.global.tb,
-      #   object.names.colname = "config.name",
-      #   object.values.colname = "config.value"
-      # )
-     
     
-  # IMPORT SOURCE DATA (defining function only) ----
+  # IMPORT SOURCE DATA (defining function) ----
   
     source.data.folder.id <- "16TJ2HhbdUzSEFatsTsOvtN3gYkM4eZDQ"
     import.files.tb <- 
@@ -142,6 +135,8 @@
   
   #1. TEMPERATURE ----
     
+    
+    
   #2. PRECIPITATION ----
     
   #3. UV ----
@@ -150,7 +145,9 @@
     
     CleanReshape_UV <- 
       function(source_table_list, source_table_names){
-
+        
+        theme <- "3.uv"
+        
         scenario <- 
           source_table_names %>%
           strsplit(., "_") %>% 
@@ -169,15 +166,38 @@
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
           ReplaceNames(., c("id", "nation"), c("country.id","country.name")) %>%  #standardize geographic variable names
           mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into numeric
-          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          select(-country.name) %>%
+          melt(., id = c("country.id")) %>% #reshape to long
           mutate(
-            scenario = scenario,  #add scenario variable
+            climate.forcing.scenario = scenario,  #add scenario variable
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
-            year = str_extract(variable, "^[^ ]+"),  #create year variable
-            month = str_extract(variable, "(?<= - ).*"),  #create month variable
-            indicator = indicator #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
+            year = str_extract(variable, "^[^ ]+") %>% as.numeric,  #create year variable
+            month = str_extract(variable, "(?<= - ).*") %>% as.numeric,  #create month variable
+            indicator = indicator, #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
+            theme = theme
           ) %>%
-          select(country.id, country.name, scenario, year, month, indicator, value) %>% #select & order final variables
+          left_join( #add country metadata from configs table
+            ., 
+            countries.tb,
+            by = "country.id"
+          ) %>%
+          left_join( #add associated publications metadata from configs table
+            ., 
+            associated.publications.tb,
+            by = c("theme","climate.forcing.scenario")
+          ) %>%
+          left_join( #add months metadata (seasons in n & s hemisphere)
+            ., 
+            months.metadata.tb,
+            by = "month"
+          ) %>%
+          select( #select & order final variables
+            country.id, country.name, country.iso3,	country.hemisphere,	
+            country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons,
+            climate.forcing.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion, 
+            year, month, season.n.hemisphere, season.s.hemisphere,
+            indicator, value
+          ) %>% 
           as_tibble  #ensure final result is a tibble
         
         print(source_table_names)
@@ -194,12 +214,18 @@
       do.call(rbind, .) %>%
       as_tibble()
     
-  #4a. AGRICULTURE CLM (Community Land Model, Lili) ----
+    #uv.clean.tb %>%
+    #  select(-value) %>%
+    #  apply(., 2, TableWithNA)
+    
+  #4a. AGRICULTURE CLM (Community Land Model) ----
     
     ImportSourceData("4a. Agriculture CLM")
     
     CleanReshape_AgricultureCLM <- 
       function(source_table_list, source_table_names){
+        
+        theme  <- "4a.agriculture"
         
         crop <- 
           source_table_names %>%
@@ -217,15 +243,33 @@
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
           ReplaceNames(., c("nation-id", "nation-name"), c("country.id","country.name")) %>%  #standardize geographic variable names
-          select(-id) %>%
-          melt(., id = c("country.id","country.name")) %>% #reshape to long
+          select(-id, -country.name) %>%
+          melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
-            scenario = variable,
+            climate.forcing.scenario = variable %>% gsub("t","T", .),
             crop = crop,
             years_elapsed = years_elapsed,
-            pct.change.harvest.mass = value
+            pct.change.harvest.mass = na_if(value, 9.96920996838686e+36),
+            theme = theme 
           ) %>%
-          select(country.id, country.name, scenario, crop, years_elapsed, pct.change.harvest.mass) %>% #select & order final variables
+          left_join( #add country metadata from configs table
+            ., 
+            countries.tb,
+            by = "country.id"
+          ) %>%
+          left_join( #add associated publications metadata from configs table
+            ., 
+            associated.publications.tb,
+            by = c("theme","climate.forcing.scenario")
+          ) %>%
+          select( #select & order final variables
+            country.id, country.name, country.iso3,	country.hemisphere,	
+            country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
+            climate.forcing.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion,
+            years_elapsed,
+            crop, 
+            pct.change.harvest.mass
+          ) %>% 
           as_tibble #ensure final result is a tibble
         
         print(source_table_names)
@@ -242,9 +286,9 @@
       do.call(rbind, .) %>%
       as_tibble()
     
-    agriculture.clm.clean.tb %>% 
-      select(-pct.change.harvest.mass) %>% 
-      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
+    #agriculture.clm.clean.tb %>% 
+    #  select(-pct.change.harvest.mass) %>% 
+    #  apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
   #4b. AGRICULTURE MMA (Multi-Model Aggregates, Jonas) ----
     
@@ -253,7 +297,7 @@
     CleanReshape_AgricultureMMA <- 
       function(source_table_list, source_table_names){
         
-        climate.model <- 
+        earth.system.simulation.reference  <- 
           source_table_names %>%
           strsplit(., "_") %>% 
           unlist %>%
@@ -276,20 +320,36 @@
         result <- 
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
-          ReplaceNames(., c("...1","country_name", "country_iso3"), c("country.id","country.name","country.abbrev.iso3")) %>%  #standardize geographic variable names
+          select(-country_name, -country_iso3) %>%
+          ReplaceNames(., "...1", "country.id") %>%  #standardize geographic variable names
           mutate(across(where(is.list), ~ suppressWarnings(as.character(unlist(.))))) %>% #convert all list variables into character
-          melt(., id = c("country.id","country.name", "country.abbrev.iso3")) %>% #reshape to long
+          melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
-            climate.model = climate.model,
-            scenario = scenario,
+            earth.system.simulation.reference  = earth.system.simulation.reference ,
+            climate.forcing.scenario = scenario,
             crop = crop,
-            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$"),
+            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$") %>% as.numeric,
             indicator = indicator,
             pct.change.harvest.yield = value %>% as.numeric %>% suppressWarnings()
           ) %>%
+          left_join( #add country metadata from configs table
+            ., 
+            countries.tb,
+            by = "country.id"
+          ) %>%
+          mutate(
+            associated.publication_earth.system.simulation.reference = 
+              recode(
+                earth.system.simulation.reference,
+                "Mills"="Mills et al., 2014, “Multidecadal Global Cooling and Unprecedented Ozone Loss Following a Regional Nuclear Conflict.”",
+                "Bardeen"="Toon et al., 2019, “Rapidly Expanding Nuclear Arsenals in Pakistan and India Portend Regional and Global Catastrophe.”"
+              ),
+            associated.publication_analysis.and.discussion = "Jagermeyr et al., 2020, “A Regional Nuclear Conflict Would Compromise Global Food Security.”"
+          ) %>%
           select( #select & order final variables
-            climate.model, scenario, 
-            country.id, country.name, country.abbrev.iso3, 
+            country.id, country.name, country.iso3,	country.hemisphere,	
+            country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
+            climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
             years_elapsed, 
             crop, indicator, pct.change.harvest.yield
           ) %>% 
@@ -298,6 +358,7 @@
         print(source_table_names)
         
         return(result)
+        
       }
     
     agriculture.mma.clean.tb <- #create final cleaned & compiled data table
@@ -309,9 +370,9 @@
       do.call(rbind, .) %>%
       as_tibble()
     
-    agriculture.mma.clean.tb %>% 
-      select(-names(.)[length(names(.))]) %>% 
-      apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
+    #agriculture.mma.clean.tb %>% 
+    #  select(-names(.)[length(names(.))]) %>% 
+    #  apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
   #5. FISHERIES ----
     
@@ -320,7 +381,7 @@
     CleanReshape_Fisheries <- 
       function(source_table_list, source_table_names){
         
-        climate.model <- ""
+        theme <- "5.fisheries"
         
         scenario <- 
           source_table_names
@@ -332,12 +393,13 @@
           mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into character
           melt(., id = c("eez","eez_no", "eez_area")) %>% #reshape to long
           mutate( #add/rename variables
-            climate.model = climate.model,
+            theme = theme,
+            climate.forcing.scenario = scenario,
             years_elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
             indicator.raw = 
               variable %>% 
               str_extract(., "(?<=_).*?(?=_[^_]*$)"),
-            scenario = scenario,
+            value = value %>% divide_by(1000000000),
           ) %>%
           mutate(
             indicator = 
@@ -348,18 +410,24 @@
                 "indicator.name.clean",
                 mult.replacements.per.cell = FALSE
               ),
-            scenario = if_else(str_detect(indicator, "ctrl"), "control", scenario),
+            climate.forcing.scenario = if_else(str_detect(indicator, "ctrl"), "control", climate.forcing.scenario),
           ) %>%
           dcast(
             ., 
-            climate.model + scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
+            theme + climate.forcing.scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
             value.var = "value"
+          ) %>%
+          left_join( #add associated publications metadata from configs table
+            ., 
+            associated.publications.tb,
+            by = c("theme","climate.forcing.scenario")
           ) %>%
           as_tibble #ensure final result is a tibble
         
         print(source_table_names)
         
         return(result)
+        
       }
     
     fisheries.clean.tb <- #create final cleaned & compiled data table
@@ -369,26 +437,40 @@
         names(fisheries.ls)
       ) %>%
       bind_rows(.) %>%
+      mutate(
+        mean.pct.catch.change = mean.pct.catch.change * 10^9,
+        std.dev.pct.catch.change = std.dev.pct.catch.change * 10^9
+      ) %>%
       select( #select & order final variables
-        climate.model, scenario, 
         eez, eez_no, eez_area, 
+        climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
         years_elapsed, 
-        mean.catch, std.dev.catch, 
-        mean.catch.change, std.dev.catch.change,
-        pct.catch.change, std.dev.pct.catch.change
-      ) #%>%
-      #select(climate.model, scenario, eez, eez_no, eez_area,years_elapsed) %>%
-      #apply(., 2, TableWithNA)
+        mean.catch,  
+        mean.catch.change, 
+        mean.pct.catch.change, 
+        std.dev.catch,
+        std.dev.catch.change,
+        std.dev.pct.catch.change
+      ) 
+    
+    #fisheries.clean.tb %>%
+    #  select(
+    #    eez, eez_no, eez_area, 
+    #    climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
+    #    years_elapsed
+    #  ) %>%
+    #  apply(., 2, TableWithNA)
     
   #6. SEA ICE ----
     
     ImportSourceData("6. Sea Ice")
     
-    #source_table <- sea.ice.ls[[2]] # for testing
     CleanReshape_SeaIce <- 
       function(source_table){
         
         scenario <- names(source_table)[1] %>% str_extract(., "(?<=NW-).*")
+        
+        theme  <- "6.sea.ice"
         
         result <-
           source_table %>%
@@ -401,14 +483,31 @@
           ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
           mutate(
             months_elapsed = as.character(month) %>% gsub("\\.", "", .) %>% as.numeric %>% subtract(1),  # Clean and convert month strings
-            month = (months_elapsed - 1) %% 12 + 1,                                     # Calculate the month (1-12)
-            years_elapsed = (months_elapsed - 1) %/% 12                                 # Calculate the year (0, 1, 2, ...)
+            month = (months_elapsed - 1) %% 12 + 1,  # Calculate the month (1-12)
+            years_elapsed = (months_elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
           ) %>%
           mutate(
-            scenario = scenario,
+            climate.forcing.scenario = scenario %>% recode(., "46.8Tg" = "47Tg"),
+            theme = theme,
             indicator = "avg. thickness (m)"
           ) %>%
-          select(port,scenario, month, months_elapsed, years_elapsed, indicator, sea.ice.thickness.meters) %>%
+          left_join( #add months metadata (seasons in n & s hemisphere)
+            ., 
+            months.metadata.tb,
+            by = "month"
+          ) %>%
+          left_join( #add associated publications metadata from configs table
+            ., 
+            associated.publications.tb,
+            by = c("theme","climate.forcing.scenario")
+          ) %>%
+          select(
+            port,
+            climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion, 
+            month, months_elapsed, years_elapsed, 
+            indicator, 
+            sea.ice.thickness.meters
+          ) %>%
           as_tibble
         
         return(result)
@@ -421,6 +520,10 @@
       ) %>%
       do.call(rbind, .) %>%
       as_tibble()
+    
+    #sea.ice.clean.tb %>%
+    #  select(-sea.ice.thickness.meters) %>%
+    #  apply(., 2, TableWithNA)
   
 # 4-EXPORT --------------------------------------------------------------------------------
   
