@@ -60,6 +60,7 @@
     LoadCommonPackages()
     library(googledrive)
     library(purrr)
+    library(ncdf4)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
@@ -101,7 +102,7 @@
       mutate(mimeType = map_chr(drive_resource, "mimeType")) %>%
       filter(mimeType == "application/vnd.google-apps.spreadsheet") 
       
-    ImportSourceData <- 
+    ImportSourceData_GoogleSheets <- 
       function(name_of_file_to_be_imported){
         
         file.id <- 
@@ -129,11 +130,67 @@
         assign(list.name, import.tables.ls, envir = .GlobalEnv) #create a list of the imported tables in the global environment
         print(list.name)
         
-      } # End of function definition for ImportSourceData
+      } # End of function definition for ImportSourceData_GoogleSheets
+    
+    ImportSourceData_NC <-
+      function(directory){
+        
+          nc.dir <- directory # Define the directory containing .nc files
+          nc.files <- list.files(nc.dir, pattern = "\\.nc$", full.names = TRUE)
+        
+          data.ls <- list() # Initialize an empty list to store data
+        
+          for (file in nc.files) { # Loop through each .nc file
+            
+            print(paste("Processing file:", file)) # Print the current file being processed
+                    
+            nc <- nc_open(file) # Open the .nc file
+            
+            # Extract dimensions (lat, lon, time)
+              lat <- ncvar_get(nc, "lat")
+              lon <- ncvar_get(nc, "lon")
+              time <- ncvar_get(nc, "time")
+            
+            file.data <- expand.grid(lat = lat, lon = lon, time = time, file.name = basename(file)) %>% as_tibble() # Flatten and store dimensions
+            
+            for (var.name in names(nc$var)) { # Loop through variables and extract their values
+              
+              var.data <- ncvar_get(nc, var.name) # Get the variable data
+              
+              var.dims <- dim(var.data)
+              print(paste("Variable:", var.name, "Dimensions:", paste(var.dims, collapse = " x "))) # Print the dimensions of the variable
+              
+              expected.dims <- c(length(lon), length(lat)) # Adjust expected dimensions based on time length
+              
+              if (!is.null(var.dims) && length(var.dims) == length(expected.dims) && all(var.dims == expected.dims)) {
+                file.data[[var.name]] <- as.vector(var.data) # Flatten and add to the data frame
+              } else {
+                warning(paste("Variable", var.name, "dimensions do not match expected", paste(expected.dims, collapse = " x "), ". Skipping.")) # Skip variables with mismatched dimensions
+              }
+            } # End of loop by variable
+            
+            nc_close(nc) # Close the .nc file
+            
+            data.ls[[file]] <- file.data # Append to the list
+          } # End of loop by file
+        
+        return(data.ls)
+        
+      } # End of function definition for ImportSourceData_NC
     
 # 2-CLEANING & RESHAPING --------------------------------------------------------------------------------
   
   #1. TEMPERATURE ----
+    
+    temp.ls <- 
+      ImportSourceData_NC(
+        "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature\\"
+      )
+    
+    # Combine all data frames into one large table
+    temp.tb <- 
+      bind_rows(temp.ls) %>% 
+      as_tibble
     
     
     
@@ -141,7 +198,7 @@
     
   #3. UV ----
     
-    ImportSourceData("3. UV")
+    ImportSourceData_GoogleSheets("3. UV")
     
     CleanReshape_UV <- 
       function(source_table_list, source_table_names){
@@ -220,7 +277,7 @@
     
   #4a. AGRICULTURE CLM (Community Land Model) ----
     
-    ImportSourceData("4a. Agriculture CLM")
+    ImportSourceData_GoogleSheets("4a. Agriculture CLM")
     
     CleanReshape_AgricultureCLM <- 
       function(source_table_list, source_table_names){
@@ -292,7 +349,7 @@
     
   #4b. AGRICULTURE MMA (Multi-Model Aggregates, Jonas) ----
     
-    ImportSourceData("4b. Agriculture MMA")
+    ImportSourceData_GoogleSheets("4b. Agriculture MMA")
     
     CleanReshape_AgricultureMMA <- 
       function(source_table_list, source_table_names){
@@ -376,7 +433,7 @@
     
   #5. FISHERIES ----
     
-    ImportSourceData("5. Fisheries")
+    ImportSourceData_GoogleSheets("5. Fisheries")
     
     CleanReshape_Fisheries <- 
       function(source_table_list, source_table_names){
@@ -463,7 +520,7 @@
     
   #6. SEA ICE ----
     
-    ImportSourceData("6. Sea Ice")
+    ImportSourceData_GoogleSheets("6. Sea Ice")
     
     CleanReshape_SeaIce <- 
       function(source_table){
