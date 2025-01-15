@@ -132,69 +132,128 @@
         
       } # End of function definition for ImportSourceData_GoogleSheets
     
-    ImportSourceData_NC <-
-      function(directory){
+    ImportSourceData_NC <- function(directory, num_files = NULL) {
+      
+      nc.dir <- directory
+      nc.files.all <- list.files(nc.dir, pattern = "\\.nc$", full.names = TRUE)
+      
+      # Set num_files to the total number of files if not specified
+      if (is.null(num_files)) {
+        num_files <- length(nc.files.all)
+      }
+      
+      # Select random subset of files if num_files is less than the total
+      nc.files <- nc.files.all[sample(1:length(nc.files.all), min(num_files, length(nc.files.all)), replace = FALSE)]
+      
+      data.ls <- list()
+      
+      for (file in nc.files) {
+        print(paste("Processing file:", file))
+        nc <- nc_open(file)
         
-          nc.dir <- directory # Define the directory containing .nc files
-          nc.files <- list.files(nc.dir, pattern = "\\.nc$", full.names = TRUE)
+        # Extract dimensions
+        lat <- ncvar_get(nc, "lat")
+        lon <- ncvar_get(nc, "lon")
+        time <- ncvar_get(nc, "time")
         
-          data.ls <- list() # Initialize an empty list to store data
+        # Check if dimensions are valid
+        if (is.null(lat) || is.null(lon) || is.null(time)) {
+          warning(paste("Skipping file due to missing dimensions:", file))
+          nc_close(nc)
+          next
+        }
         
-          for (file in nc.files) { # Loop through each .nc file
-            
-            print(paste("Processing file:", file)) # Print the current file being processed
-                    
-            nc <- nc_open(file) # Open the .nc file
-            
-            # Extract dimensions (lat, lon, time)
-              lat <- ncvar_get(nc, "lat")
-              lon <- ncvar_get(nc, "lon")
-              time <- ncvar_get(nc, "time")
-            
-            file.data <- expand.grid(lat = lat, lon = lon, time = time, file.name = basename(file)) %>% as_tibble() # Flatten and store dimensions
-            
-            for (var.name in names(nc$var)) { # Loop through variables and extract their values
-              
-              var.data <- ncvar_get(nc, var.name) # Get the variable data
-              
-              var.dims <- dim(var.data)
-              print(paste("Variable:", var.name, "Dimensions:", paste(var.dims, collapse = " x "))) # Print the dimensions of the variable
-              
-              expected.dims <- c(length(lon), length(lat)) # Adjust expected dimensions based on time length
-              
-              if (!is.null(var.dims) && length(var.dims) == length(expected.dims) && all(var.dims == expected.dims)) {
-                file.data[[var.name]] <- as.vector(var.data) # Flatten and add to the data frame
-              } else {
-                warning(paste("Variable", var.name, "dimensions do not match expected", paste(expected.dims, collapse = " x "), ". Skipping.")) # Skip variables with mismatched dimensions
-              }
-            } # End of loop by variable
-            
-            nc_close(nc) # Close the .nc file
-            
-            data.ls[[file]] <- file.data # Append to the list
-          } # End of loop by file
+        # Create a data frame for this file
+        file.data <- expand.grid(lat = lat, lon = lon, time = time, file_name = basename(file)) %>% as_tibble()
         
-        return(data.ls)
+        for (var.name in names(nc$var)) {
+          var.data <- ncvar_get(nc, var.name)
+          var.dims <- dim(var.data)
+          
+          print(paste("Variable:", var.name, "Dimensions:", paste(var.dims, collapse = " x ")))
+          
+          # Handle variables with 3D structure
+          expected.dims <- c(length(lon), length(lat), max(1, length(time)))
+          
+          if (!is.null(var.data) && !is.null(var.dims)) {
+            if (length(var.dims) == 3 && all(var.dims == expected.dims)) {
+              # 3D variable: lon x lat x time
+              file.data[[var.name]] <- as.vector(var.data)
+            } else if (length(var.dims) == 2 && all(var.dims == c(length(lon), length(lat)))) {
+              # 2D variable (e.g., no time dimension): replicate across time
+              var.data <- array(var.data, dim = c(length(lon), length(lat), length(time)))
+              file.data[[var.name]] <- as.vector(var.data)
+            } else {
+              warning(paste("Variable", var.name, "has unexpected dimensions. Skipping."))
+            }
+          } else {
+            warning(paste("Variable", var.name, "is NULL or invalid. Skipping."))
+          }
+        }
         
-      } # End of function definition for ImportSourceData_NC
+        nc_close(nc)
+        data.ls[[file]] <- file.data
+      }
+      
+      return(data.ls)
+    } # End of function definition for ImportSourceData_NC
     
 # 2-CLEANING & RESHAPING --------------------------------------------------------------------------------
   
-  #1. TEMPERATURE ----
+  #1. TEMPERATURE & PRECIPITATION ----
     
-    temp.ls <- 
-      ImportSourceData_NC(
-        "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature\\"
-      )
+    #Control 03
+      cntrl.03.ls <- #Import Files/Tables to a list
+        ImportSourceData_NC(
+          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_cntrl_03.TS_TSMN_TSMX_PRECC_PRECL.nc\\",
+          num_files = 5
+        )
+      
+      cntrl.03.tb <- #Combine all tables into one large table
+        bind_rows(cntrl.03.ls) %>% 
+        as_tibble
+      
+      cntrl.03.tb %>% lapply(., summary)
+      
+    #Targets 04
+      targets.04.ls <- #Import Files/Tables to a list
+        ImportSourceData_NC(
+          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_04.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
+          num_files = 5
+        )
+      
+      targets.04.tb <- #Combine all tables into one large table
+        bind_rows(targets.04.ls) %>% 
+        as_tibble
+      
+      targets.04.tb %>% lapply(., summary)
+      
+    #Targets 05
+      targets.05.ls <- #Import Files/Tables to a list
+        ImportSourceData_NC(
+          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
+          num_files = 5
+        )
+      
+      targets.05.tb <- #Combine all tables into one large table
+        bind_rows(targets.05.ls) %>% 
+        as_tibble
+      
+      targets.05.tb %>% lapply(., summary)
+      
+    #UR 150
+      ur.150.ls <- #Import Files/Tables to a list
+        ImportSourceData_NC(
+          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
+          num_files = 5
+        )
+      
+      ur.150.tb <- #Combine all tables into one large table
+        bind_rows(ur.150.ls) %>% 
+        as_tibble
+      
+      ur.150.tb %>% lapply(., summary)
     
-    # Combine all data frames into one large table
-    temp.tb <- 
-      bind_rows(temp.ls) %>% 
-      as_tibble
-    
-    
-    
-  #2. PRECIPITATION ----
     
   #3. UV ----
     
