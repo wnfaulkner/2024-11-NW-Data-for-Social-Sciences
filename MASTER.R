@@ -6,6 +6,7 @@
 	
   # INITIAL SETUP
     rm(list=ls()) #Remove lists
+    gc()
     options(java.parameters = "- Xmx8g") #helps r not to fail when importing large xlsx files with xlsx package
     
   # SECTION & CODE CLOCKING
@@ -59,8 +60,10 @@
     library(wnf.utils)
     LoadCommonPackages()
     library(googledrive)
+      drive_auth(email = "william@fluxrme.com")
     library(purrr)
     library(ncdf4)
+    library(janitor)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
@@ -202,58 +205,37 @@
   
   #1. TEMPERATURE & PRECIPITATION ----
     
-    #Control 03
-      cntrl.03.ls <- #Import Files/Tables to a list
-        ImportSourceData_NC(
-          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_cntrl_03.TS_TSMN_TSMX_PRECC_PRECL.nc\\",
-          num_files = 5
-        )
-      
-      cntrl.03.tb <- #Combine all tables into one large table
-        bind_rows(cntrl.03.ls) %>% 
-        as_tibble
-      
-      cntrl.03.tb %>% lapply(., summary)
-      
-    #Targets 04
-      targets.04.ls <- #Import Files/Tables to a list
-        ImportSourceData_NC(
-          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_04.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
-          num_files = 5
-        )
-      
-      targets.04.tb <- #Combine all tables into one large table
-        bind_rows(targets.04.ls) %>% 
-        as_tibble
-      
-      targets.04.tb %>% lapply(., summary)
-      
-    #Targets 05
-      targets.05.ls <- #Import Files/Tables to a list
-        ImportSourceData_NC(
-          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
-          num_files = 5
-        )
-      
-      targets.05.tb <- #Combine all tables into one large table
-        bind_rows(targets.05.ls) %>% 
-        as_tibble
-      
-      targets.05.tb %>% lapply(., summary)
-      
-    #UR 150
-      ur.150.ls <- #Import Files/Tables to a list
-        ImportSourceData_NC(
-          directory = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
-          num_files = 5
-        )
-      
-      ur.150.tb <- #Combine all tables into one large table
-        bind_rows(ur.150.ls) %>% 
-        as_tibble
-      
-      ur.150.tb %>% lapply(., summary)
+    # Define the function
+      process_source_data <- function(name, directory, num_files) {
+        # Step 1: Import files/tables to a list
+        data_list <- ImportSourceData_NC(directory = directory, num_files = num_files)
+        
+        # Step 2: Clean names and combine into a single tibble
+        data_table <- data_list %>%
+          lapply(clean_names) %>% # Clean column names
+          bind_rows() %>%         # Combine all tables into one large tibble
+          as_tibble()
+        
+        # Return a list containing the table and its summary
+        return(setNames(list(data_table), name))
+      }
     
+    # Directories and file information
+      directories <- list(
+        cntrl_03 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_cntrl_03.TS_TSMN_TSMX_PRECC_PRECL.nc\\",
+        targets_04 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_04.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
+        targets_05 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
+        ur_150 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\"
+      )
+    
+    # Apply the function to all directories
+      temp.precip.ls <- 
+        lapply(
+          names(directories), 
+          function(name) {
+            process_source_data(name = name, directory = directories[[name]], num_files = 3)
+          }
+        )
     
   #3. UV ----
     
