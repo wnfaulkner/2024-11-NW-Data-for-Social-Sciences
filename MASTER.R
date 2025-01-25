@@ -157,7 +157,7 @@
         # Extract dimensions
         lat <- ncvar_get(nc, "lat")
         lon <- ncvar_get(nc, "lon")
-        time <- ncvar_get(nc, "time")
+        days_elapsed <- ncvar_get(nc, "time")
         
         # Check if dimensions are valid
         if (is.null(lat) || is.null(lon) || is.null(time)) {
@@ -167,7 +167,7 @@
         }
         
         # Create a data frame for this file
-        file.data <- expand.grid(lat = lat, lon = lon, time = time, file_name = basename(file)) %>% as_tibble()
+        file.data <- expand.grid(lat = lat, lon = lon, days_elapsed = days_elapsed, file.name = basename(file)) %>% as_tibble()
         
         for (var.name in names(nc$var)) {
           var.data <- ncvar_get(nc, var.name)
@@ -205,36 +205,108 @@
   
   #1. TEMPERATURE & PRECIPITATION ----
     
-    # Define the function
-      process_source_data <- function(name, directory, num_files) {
-        # Step 1: Import files/tables to a list
-        data_list <- ImportSourceData_NC(directory = directory, num_files = num_files)
-        
-        # Step 2: Clean names and combine into a single tibble
-        data_table <- data_list %>%
-          lapply(clean_names) %>% # Clean column names
-          bind_rows() %>%         # Combine all tables into one large tibble
-          as_tibble()
-        
-        # Return a list containing the table and its summary
-        return(setNames(list(data_table), name))
-      }
+    # Import Pre-Compiled File
+      base.directory <- "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\"       # Define the base directory
+      setwd(base.directory)
+      temp.precip.compiled.tb <- read.csv("temp.precip.compiled.csv")  
     
-    # Directories and file information
-      directories <- list(
-        cntrl_03 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_cntrl_03.TS_TSMN_TSMX_PRECC_PRECL.nc\\",
-        targets_04 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_04.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
-        targets_05 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\",
-        ur_150 = "G:\\.shortcut-targets-by-id\\1qZrp43j-iqzFcsNWVcnLqXYzfWOWn6xZ\\Data Paper\\1. Data & Figures\\1. Source Data\\1 & 2. Temperature & Precipitation\\nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\"
-      )
-    
-    # Apply the function to all directories
-      temp.precip.ls <- 
-        lapply(
-          names(directories), 
-          function(name) {
-            process_source_data(name = name, directory = directories[[name]], num_files = 3)
+    # Import Raw Files & Combine into Tables
+      if(!exists("temp.precip.compiled.tb")){
+        # Define the overarching import function that will be applied through all of the files in each directory
+          ImportTempPrecip <- function(directory, num_files = NULL) {
+            # Step 1: Set num_files to all files in the directory if not provided
+            if (is.null(num_files)) {
+              num_files <- length(list.files(directory))
+            }
+            
+            # Step 2: Import files/tables to a list
+            data_list <- ImportSourceData_NC(directory = directory, num_files = num_files)
+            
+            # Step 3: Clean names and combine into a single tibble
+            data_table <- data_list %>%
+              lapply(clean_names) %>% # Clean column names
+              bind_rows() %>%         # Combine all tables into one large tibble
+              as_tibble()
+            
+            # Return a list containing the table and its summary
+            return(data_table)
           }
+        
+        # Directories and file information
+          
+          # Append specific subdirectories
+            directories <- list(
+              cntrl_03 = paste0(base_directory, "nw_cntrl_03.TS_TSMN_TSMX_PRECC_PRECL.nc\\"),
+              targets_04 = paste0(base_directory, "nw_targets_04.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\"),
+              targets_05 = paste0(base_directory, "nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\"),
+              ur_150 = paste0(base_directory, "nw_targets_05.TS_TSMN_TSMX_PRECC_PRECL.nc.tar\\")
+            )
+        
+        # Apply the function to all directories
+          temp.precip.ls <- 
+            lapply(
+              names(directories), 
+              function(name) {
+                ImportTempPrecip(directory = directories[[name]])
+              }
+            )
+          
+          names(temp.precip.ls) <- names(directories)
+          
+        # Clean & Reshape Each List Element (in this case each table represents a climate forcing scenario)
+          
+          Compile_TempPrecip <-
+            function(source_table_list, source_table_names){
+              data.tb <- source_table_list
+              
+              data.tb$climate.forcing.scenario <- source_table_names
+              
+              return(data.tb)
+            }
+          
+          
+          temp.precip.compiled.tb <-
+            Map(
+              Compile_TempPrecip,
+              temp.precip.ls,
+              names(temp.precip.ls)
+            ) %>%
+            do.call(rbind, .) %>%
+            as_tibble() 
+      }
+        
+      temp.precip.clean.tb <-
+        temp.precip.compiled.tb %>%
+        ReplaceNames(
+          ., 
+          current.names = c("lat","lon","days_elapsed", "file_name", "precc", "precl", "ts", "tsmn", "tsmx"),
+          new.names = c("latitude", "longitude", "days.elapsed","file.name","precip.rate.convective","precip.rate.stable","surface.temp","surface.temp.min","surface.temp.max")
+        ) %>%
+        mutate(
+          climate.forcing.scenario = 
+            recode(
+              climate.forcing.scenario, 
+              cntrl_03 = "control",
+              targets_04 = "16Tg",
+              targets_05 = "5Tg",
+              ur_150 = "150Tg"
+            ),
+        ) %>%
+        mutate(
+          base.date = 
+            recode(
+              climate.forcing.scenario,
+              "control" = "01/31/2018" %>% as.Date(., format = "%m/%d/%Y"),
+              "16Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y"),
+              "5Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y"),
+              "150Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y")
+            )
+        ) %>%
+        mutate(
+          date = base.date + days.elapsed
+        ) %>% 
+        mutate(
+          years.elapsed <- days.elapsed %>% divide_by(365) %>% round(., digits = 0)
         )
     
   #3. UV ----
