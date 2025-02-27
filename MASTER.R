@@ -276,9 +276,9 @@
             as_tibble() 
       }
 
-      temp.precip.clean.tb <-
+      temp.precip.cln.tb <-
         temp.precip.compiled.tb %>%
-        .[sample(nrow(.), 50000), ] %>%
+        #.[sample(nrow(.), 50000), ] %>%
         ReplaceNames(
           ., 
           current.names = c("lat","lon","days_elapsed", "file_name", "precc", "precl", "ts", "tsmn", "tsmx"),
@@ -304,18 +304,21 @@
         ) %>%
         mutate(
           date = base.date + days.elapsed,
-          years.elapsed = round(days.elapsed / 365, digits = 0),  # Corrected variable assignment
-          month = floor_date(date, "month")  # Extracts first day of the month
+          month = month(date),
+          years.elapsed = round(days.elapsed / 365, digits = 0),  
+          months.elapsed = years.elapsed*12+month
         ) %>%
-        group_by(latitude, longitude, month, file.name, climate.forcing.scenario) %>%
-        summarise(
-          precip.rate.convective = mean(precip.rate.convective, na.rm = TRUE),
-          precip.rate.stable = mean(precip.rate.stable, na.rm = TRUE),
-          surface.temp = mean(surface.temp, na.rm = TRUE),
-          surface.temp.min = mean(surface.temp.min, na.rm = TRUE),
-          surface.temp.max = mean(surface.temp.max, na.rm = TRUE),
-          .groups = "drop"
-        )
+        mutate( #converting units from m/s to mm/month and kelvin to celsius
+          precip.rate.convective = precip.rate.convective * 1000 * 86400 * 30.4375,
+          precip.rate.stable = precip.rate.stable * 1000 * 86400 * 30.4375,
+          surface.temp = surface.temp - 273.15,
+          surface.temp.min = surface.temp.min - 273.15,
+          surface.temp.max = surface.temp.max - 273.15
+        ) %>%
+        select(
+          soot.injection.scenario, latitude, longitude, years.elapsed, months.elapsed, month, 
+          precip.rate.convective, precip.rate.stable, surface.temp, surface.temp.min, surface.temp.max
+        ) 
     
   #3. UV ----
     
