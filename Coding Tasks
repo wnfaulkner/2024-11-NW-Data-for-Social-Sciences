@@ -1,0 +1,32 @@
+0. OVERARCHING
+  Make var climate.forcing.scenario numeric so it will order correctly
+  --Rename var climate.forcing.scenario to soot.injection.scenario
+  
+1 & 2. TEMP & PRECIP
+  Figure out time unit - average over months to make data smaller?
+  Convert units: 
+    PRECC: m/s to mm/month
+    PRECL: m/s to mm/month
+    TS, TSMN, TSMX: kelvin to celsius
+    LOOK AT WORLD BANK DATA PORTAL - WHAT UNITS DO THEY USE?
+
+3. UV
+  Verify duplicate numbers with Josh.
+
+4A. AGRICULTURE CLM
+  Remove associated publications & indicator description from data table
+  Rename indicator - % change in yield
+
+4B. AGRICULTURE AGMIP
+  Rename 'AGMIP' instead of 'MMA'
+  Remove associated publications & indicator description from data table
+  Rename indicator - % change in yield
+
+5. FISH CATCH
+  Change 'fisheries' to 'fish catch'
+  Finalize selection of unit for each var - tons? Thousands of tons?
+  
+6. SEA ICE
+   (low priority) Find & add control dataset
+
+

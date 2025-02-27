@@ -64,6 +64,7 @@
     library(purrr)
     library(ncdf4)
     library(janitor)
+    library(lubridate)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
@@ -259,7 +260,7 @@
             function(source_table_list, source_table_names){
               data.tb <- source_table_list
               
-              data.tb$climate.forcing.scenario <- source_table_names
+              data.tb$soot.injection.scenario <- source_table_names
               
               return(data.tb)
             }
@@ -274,39 +275,46 @@
             do.call(rbind, .) %>%
             as_tibble() 
       }
-        
+
       temp.precip.clean.tb <-
         temp.precip.compiled.tb %>%
+        .[sample(nrow(.), 50000), ] %>%
         ReplaceNames(
           ., 
           current.names = c("lat","lon","days_elapsed", "file_name", "precc", "precl", "ts", "tsmn", "tsmx"),
           new.names = c("latitude", "longitude", "days.elapsed","file.name","precip.rate.convective","precip.rate.stable","surface.temp","surface.temp.min","surface.temp.max")
         ) %>%
         mutate(
-          climate.forcing.scenario = 
-            recode(
-              climate.forcing.scenario, 
-              cntrl_03 = "control",
-              targets_04 = "16Tg",
-              targets_05 = "5Tg",
-              ur_150 = "150Tg"
-            ),
+          soot.injection.scenario = recode(
+            climate.forcing.scenario, 
+            cntrl_03 = 0,
+            targets_04 = 16,
+            targets_05 = 5,
+            ur_150 = 150
+          )
         ) %>%
         mutate(
-          base.date = 
-            recode(
-              climate.forcing.scenario,
-              "control" = "01/31/2018" %>% as.Date(., format = "%m/%d/%Y"),
-              "16Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y"),
-              "5Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y"),
-              "150Tg" = "01/31/2020" %>% as.Date(., format = "%m/%d/%Y")
-            )
+          base.date = case_when(
+            soot.injection.scenario == 0 ~ as.Date("01/31/2018", format = "%m/%d/%Y"),
+            soot.injection.scenario == 5 ~ as.Date("01/31/2020", format = "%m/%d/%Y"),
+            soot.injection.scenario == 16 ~ as.Date("01/31/2020", format = "%m/%d/%Y"),
+            soot.injection.scenario == 150 ~ as.Date("01/31/2020", format = "%m/%d/%Y"),
+            TRUE ~ NA_Date_  # Handle unexpected values safely
+          )
         ) %>%
         mutate(
-          date = base.date + days.elapsed
-        ) %>% 
-        mutate(
-          years.elapsed <- days.elapsed %>% divide_by(365) %>% round(., digits = 0)
+          date = base.date + days.elapsed,
+          years.elapsed = round(days.elapsed / 365, digits = 0),  # Corrected variable assignment
+          month = floor_date(date, "month")  # Extracts first day of the month
+        ) %>%
+        group_by(latitude, longitude, month, file.name, climate.forcing.scenario) %>%
+        summarise(
+          precip.rate.convective = mean(precip.rate.convective, na.rm = TRUE),
+          precip.rate.stable = mean(precip.rate.stable, na.rm = TRUE),
+          surface.temp = mean(surface.temp, na.rm = TRUE),
+          surface.temp.min = mean(surface.temp.min, na.rm = TRUE),
+          surface.temp.max = mean(surface.temp.max, na.rm = TRUE),
+          .groups = "drop"
         )
     
   #3. UV ----
@@ -339,7 +347,7 @@
           select(-country.name) %>%
           melt(., id = c("country.id")) %>% #reshape to long
           mutate(
-            climate.forcing.scenario = scenario,  #add scenario variable
+            soot.injection.scenario = scenario,  #add scenario variable
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
             year = str_extract(variable, "^[^ ]+") %>% as.numeric,  #create year variable
             month = str_extract(variable, "(?<= - ).*") %>% as.numeric,  #create month variable
@@ -354,7 +362,7 @@
           left_join( #add associated publications metadata from configs table
             ., 
             associated.publications.tb,
-            by = c("theme","climate.forcing.scenario")
+            by = c("theme","soot.injection.scenario")
           ) %>%
           left_join( #add months metadata (seasons in n & s hemisphere)
             ., 
@@ -364,7 +372,7 @@
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons,
-            climate.forcing.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion, 
+            soot.injection.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion, 
             year, month, season.n.hemisphere, season.s.hemisphere,
             indicator, value
           ) %>% 
@@ -416,7 +424,7 @@
           select(-id, -country.name) %>%
           melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
-            climate.forcing.scenario = variable %>% gsub("t","T", .),
+            soot.injection.scenario = variable %>% gsub("t","T", .),
             crop = crop,
             years_elapsed = years_elapsed,
             pct.change.harvest.mass = na_if(value, 9.96920996838686e+36),
@@ -430,12 +438,12 @@
           left_join( #add associated publications metadata from configs table
             ., 
             associated.publications.tb,
-            by = c("theme","climate.forcing.scenario")
+            by = c("theme","soot.injection.scenario")
           ) %>%
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
-            climate.forcing.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion,
+            soot.injection.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion,
             years_elapsed,
             crop, 
             pct.change.harvest.mass
@@ -496,7 +504,7 @@
           melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
             earth.system.simulation.reference  = earth.system.simulation.reference ,
-            climate.forcing.scenario = scenario,
+            soot.injection.scenario = scenario,
             crop = crop,
             years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$") %>% as.numeric,
             indicator = indicator,
@@ -519,7 +527,7 @@
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
-            climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
+            soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
             years_elapsed, 
             crop, indicator, pct.change.harvest.yield
           ) %>% 
@@ -531,27 +539,27 @@
         
       }
     
-    agriculture.mma.clean.tb <- #create final cleaned & compiled data table
+    agriculture.agmip.clean.tb <- #create final cleaned & compiled data table
       Map(
         CleanReshape_AgricultureMMA,
-        agriculture.mma.ls,
-        names(agriculture.mma.ls)
+        agriculture.agmip.ls,
+        names(agriculture.agmip.ls)
       ) %>%
       do.call(rbind, .) %>%
       as_tibble()
     
-    #agriculture.mma.clean.tb %>% 
+    #agriculture.agmip.clean.tb %>% 
     #  select(-names(.)[length(names(.))]) %>% 
     #  apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
-  #5. FISHERIES ----
+  #5. FISH CATCH ----
     
-    ImportSourceData_GoogleSheets("5. Fisheries")
+    ImportSourceData_GoogleSheets("5. Fish Catch")
     
-    CleanReshape_Fisheries <- 
+    CleanReshape_FishCatch <- 
       function(source_table_list, source_table_names){
         
-        theme <- "5.fisheries"
+        theme <- "5.fishcatch"
         
         scenario <- 
           source_table_names
@@ -564,7 +572,7 @@
           melt(., id = c("eez","eez_no", "eez_area")) %>% #reshape to long
           mutate( #add/rename variables
             theme = theme,
-            climate.forcing.scenario = scenario,
+            soot.injection.scenario = scenario,
             years_elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
             indicator.raw = 
               variable %>% 
@@ -575,22 +583,22 @@
             indicator = 
               IndexMatchToVectorFromTibble(
                 indicator.raw, 
-                fisheries.indicators.tb,
+                fishcatch.indicators.tb,
                 "extracted.indicator.name.raw",
                 "indicator.name.clean",
                 mult.replacements.per.cell = FALSE
               ),
-            climate.forcing.scenario = if_else(str_detect(indicator, "ctrl"), "control", climate.forcing.scenario),
+            soot.injection.scenario = if_else(str_detect(indicator, "ctrl"), "control", soot.injection.scenario),
           ) %>%
           dcast(
             ., 
-            theme + climate.forcing.scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
+            theme + soot.injection.scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
             value.var = "value"
           ) %>%
           left_join( #add associated publications metadata from configs table
             ., 
             associated.publications.tb,
-            by = c("theme","climate.forcing.scenario")
+            by = c("theme","soot.injection.scenario")
           ) %>%
           as_tibble #ensure final result is a tibble
         
@@ -600,11 +608,11 @@
         
       }
     
-    fisheries.clean.tb <- #create final cleaned & compiled data table
+    fishcatch.clean.tb <- #create final cleaned & compiled data table
       Map(
-        CleanReshape_Fisheries,
-        fisheries.ls,
-        names(fisheries.ls)
+        CleanReshape_FishCatch,
+        fishcatch.ls,
+        names(fishcatch.ls)
       ) %>%
       bind_rows(.) %>%
       mutate(
@@ -613,7 +621,7 @@
       ) %>%
       select( #select & order final variables
         eez, eez_no, eez_area, 
-        climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
+        soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
         years_elapsed, 
         mean.catch,  
         mean.catch.change, 
@@ -623,10 +631,10 @@
         std.dev.pct.catch.change
       ) 
     
-    #fisheries.clean.tb %>%
+    #fishcatch.clean.tb %>%
     #  select(
     #    eez, eez_no, eez_area, 
-    #    climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
+    #    soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
     #    years_elapsed
     #  ) %>%
     #  apply(., 2, TableWithNA)
@@ -657,7 +665,7 @@
             years_elapsed = (months_elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
           ) %>%
           mutate(
-            climate.forcing.scenario = scenario %>% recode(., "46.8Tg" = "47Tg"),
+            soot.injection.scenario = scenario %>% recode(., "46.8Tg" = "47Tg"),
             theme = theme,
             indicator = "avg. thickness (m)"
           ) %>%
@@ -669,11 +677,11 @@
           left_join( #add associated publications metadata from configs table
             ., 
             associated.publications.tb,
-            by = c("theme","climate.forcing.scenario")
+            by = c("theme","soot.injection.scenario")
           ) %>%
           select(
             port,
-            climate.forcing.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion, 
+            soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion, 
             month, months_elapsed, years_elapsed, 
             indicator, 
             sea.ice.thickness.meters
@@ -705,8 +713,8 @@
         "precipitation.clean.tb",
         "uv.clean.tb",
         "agriculture.clm.clean.tb",
-        "agriculture.mma.clean.tb",
-        "fisheries.clean.tb",
+        "agriculture.agmip.clean.tb",
+        "fishcatch.clean.tb",
         "sea.ice.clean.tb"
       )
     
@@ -716,8 +724,8 @@
         "2.precipitation",
         "3.uv",
         "4a.agriculture.clm",
-        "4b.agriculture.mma",
-        "5.fisheries",
+        "4b.agriculture.agmip",
+        "5.fishcatch",
         "6.sea.ice"
       )
     
