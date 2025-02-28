@@ -40,8 +40,8 @@
     --Remove associated.publications metadata
   
 6. SEA ICE
-  Make var climate.forcing.scenario numeric so it will order correctly
-  Remove associated.publications metadata
+    --Make var climate.forcing.scenario numeric so it will order correctly
+    --Remove associated.publications metadata
   (low priority) Find & add control dataset
 
 

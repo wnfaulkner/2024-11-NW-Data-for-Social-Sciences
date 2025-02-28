@@ -685,10 +685,15 @@
           mutate(
             months.elapsed = as.character(month) %>% gsub("\\.", "", .) %>% as.numeric %>% subtract(1),  # Clean and convert month strings
             month = (months.elapsed - 1) %% 12 + 1,  # Calculate the month (1-12)
-            years.elapsed = (months_elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
+            years.elapsed = (months.elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
           ) %>%
           mutate(
-            soot.injection.scenario = scenario %>% recode(., "46.8Tg" = "47Tg"),
+            soot.injection.scenario =
+              recode(scenario, 
+                "37Tg" = 37,
+                "46.8Tg" = 47,
+                "150Tg" = 150
+              ),
             theme = theme,
             indicator = "avg. thickness (m)"
           ) %>%
@@ -697,15 +702,10 @@
             months.metadata.tb,
             by = "month"
           ) %>%
-          left_join( #add associated publications metadata from configs table
-            ., 
-            associated.publications.tb,
-            by = c("theme","soot.injection.scenario")
-          ) %>%
           select(
             port,
-            soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion, 
-            month, months_elapsed, years.elapsed, 
+            soot.injection.scenario, 
+            month, months.elapsed, years.elapsed, 
             indicator, 
             sea.ice.thickness.meters
           ) %>%
