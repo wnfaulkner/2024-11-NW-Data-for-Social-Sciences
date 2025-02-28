@@ -350,7 +350,12 @@
           select(-country.name) %>%
           melt(., id = c("country.id")) %>% #reshape to long
           mutate(
-            soot.injection.scenario = scenario,  #add scenario variable
+            #soot.injection.scenario = scenario,  #add scenario variable
+            soot.injection.scenario = recode( #add scenario variable
+              scenario, 
+              "control" = 0,
+              "150Tg" = 150
+            ),
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
             year = str_extract(variable, "^[^ ]+") %>% as.numeric,  #create year variable
             month = str_extract(variable, "(?<= - ).*") %>% as.numeric,  #create month variable
@@ -362,11 +367,11 @@
             countries.tb,
             by = "country.id"
           ) %>%
-          left_join( #add associated publications metadata from configs table
-            ., 
-            associated.publications.tb,
-            by = c("theme","soot.injection.scenario")
-          ) %>%
+          #left_join( #add associated publications metadata from configs table
+          #  ., 
+          #  associated.publications.tb,
+          #  by = c("theme","soot.injection.scenario")
+          #) %>%
           left_join( #add months metadata (seasons in n & s hemisphere)
             ., 
             months.metadata.tb,
@@ -375,10 +380,11 @@
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons,
-            soot.injection.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion, 
+            soot.injection.scenario, 
             year, month, season.n.hemisphere, season.s.hemisphere,
             indicator, value
           ) %>% 
+          ReplaceNames(., "value", "indicator.value") %>%
           as_tibble  #ensure final result is a tibble
         
         print(source_table_names)
@@ -414,7 +420,7 @@
           unlist %>%
           .[1]
         
-        years_elapsed <- 
+        years.elapsed <- 
           source_table_names %>%
           strsplit(., "-") %>% 
           unlist %>%
@@ -427,10 +433,18 @@
           select(-id, -country.name) %>%
           melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
-            soot.injection.scenario = variable %>% gsub("t","T", .),
+            soot.injection.scenario = recode(
+              variable, 
+              "5tg" = 5,
+              "16tg" = 16,
+              "27tg" = 27,
+              "37tg" = 37,
+              "47tg" = 47,
+              "150tg" = 150
+            ),
             crop = crop,
-            years_elapsed = years_elapsed,
-            pct.change.harvest.mass = na_if(value, 9.96920996838686e+36),
+            years.elapsed = years.elapsed,
+            pct.change.harvest.yield = na_if(value, 9.96920996838686e+36),
             theme = theme 
           ) %>%
           left_join( #add country metadata from configs table
@@ -438,18 +452,18 @@
             countries.tb,
             by = "country.id"
           ) %>%
-          left_join( #add associated publications metadata from configs table
-            ., 
-            associated.publications.tb,
-            by = c("theme","soot.injection.scenario")
-          ) %>%
+          #left_join( #add associated publications metadata from configs table
+          #  ., 
+          #  associated.publications.tb,
+          #  by = c("theme","soot.injection.scenario")
+          #) %>%
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
-            soot.injection.scenario, associated.publication_earth.system.simulation.reference,	associated.publication_analysis.and.discussion,
-            years_elapsed,
+            soot.injection.scenario, 
+            years.elapsed,
             crop, 
-            pct.change.harvest.mass
+            pct.change.harvest.yield
           ) %>% 
           as_tibble #ensure final result is a tibble
         
@@ -468,14 +482,14 @@
       as_tibble()
     
     #agriculture.clm.clean.tb %>% 
-    #  select(-pct.change.harvest.mass) %>% 
+    #  select(-pct.change.harvest.yield) %>% 
     #  apply(., 2, TableWithNA) #display unique values for each variable except the indicator (for checking)
     
-  #4b. AGRICULTURE MMA (Multi-Model Aggregates, Jonas) ----
+  #4b. AGRICULTURE AGMIP (Multi-Model Aggregates, Jonas) ----
     
-    ImportSourceData_GoogleSheets("4b. Agriculture MMA")
+    ImportSourceData_GoogleSheets("4b. Agriculture AGMIP")
     
-    CleanReshape_AgricultureMMA <- 
+    CleanReshape_AgricultureAGMIP <- 
       function(source_table_list, source_table_names){
         
         earth.system.simulation.reference  <- 
@@ -496,7 +510,7 @@
           unlist %>%
           .[3]
         
-        indicator <- "% change in harvest yield (tons/hectare)"
+        #indicator <- "% change in harvest yield (tons/hectare)"
         
         result <- 
           source_table_list %>% 
@@ -507,10 +521,13 @@
           melt(., id = "country.id") %>% #reshape to long
           mutate( #add/rename variables
             earth.system.simulation.reference  = earth.system.simulation.reference ,
-            soot.injection.scenario = scenario,
+            soot.injection.scenario = recode(
+              scenario, 
+              "5Tg" = 5,
+            ),
             crop = crop,
-            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]*$") %>% as.numeric,
-            indicator = indicator,
+            years.elapsed = variable %>% str_extract(., "(?<=_)[^_]*$") %>% as.numeric,
+            #indicator = indicator,
             pct.change.harvest.yield = value %>% as.numeric %>% suppressWarnings()
           ) %>%
           left_join( #add country metadata from configs table
@@ -518,21 +535,21 @@
             countries.tb,
             by = "country.id"
           ) %>%
-          mutate(
-            associated.publication_earth.system.simulation.reference = 
-              recode(
-                earth.system.simulation.reference,
-                "Mills"="Mills et al., 2014, “Multidecadal Global Cooling and Unprecedented Ozone Loss Following a Regional Nuclear Conflict.”",
-                "Bardeen"="Toon et al., 2019, “Rapidly Expanding Nuclear Arsenals in Pakistan and India Portend Regional and Global Catastrophe.”"
-              ),
-            associated.publication_analysis.and.discussion = "Jagermeyr et al., 2020, “A Regional Nuclear Conflict Would Compromise Global Food Security.”"
-          ) %>%
+          #mutate(
+          #  associated.publication_earth.system.simulation.reference = 
+          #    recode(
+          #      earth.system.simulation.reference,
+          #      "Mills"="Mills et al., 2014, “Multidecadal Global Cooling and Unprecedented Ozone Loss Following a Regional Nuclear Conflict.”",
+          #      "Bardeen"="Toon et al., 2019, “Rapidly Expanding Nuclear Arsenals in Pakistan and India Portend Regional and Global Catastrophe.”"
+          #    ),
+          #  associated.publication_analysis.and.discussion = "Jagermeyr et al., 2020, “A Regional Nuclear Conflict Would Compromise Global Food Security.”"
+          #) %>%
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
-            soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
-            years_elapsed, 
-            crop, indicator, pct.change.harvest.yield
+            soot.injection.scenario, #associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
+            years.elapsed, 
+            crop, pct.change.harvest.yield
           ) %>% 
           as_tibble #ensure final result is a tibble
         
@@ -544,7 +561,7 @@
     
     agriculture.agmip.clean.tb <- #create final cleaned & compiled data table
       Map(
-        CleanReshape_AgricultureMMA,
+        CleanReshape_AgricultureAGMIP,
         agriculture.agmip.ls,
         names(agriculture.agmip.ls)
       ) %>%
@@ -562,8 +579,6 @@
     CleanReshape_FishCatch <- 
       function(source_table_list, source_table_names){
         
-        theme <- "5.fishcatch"
-        
         scenario <- 
           source_table_names
         
@@ -571,12 +586,22 @@
           source_table_list %>% 
           select(names(.)[!str_detect(names(.), "ctrl")]) %>%
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
+          ReplaceNames(., c("eez_no", "eez_area"), c("eez.num", "eez.area")) %>%
           mutate(across(where(is.list), ~ suppressWarnings(as.numeric(unlist(.))))) %>% #convert all list variables into character
-          melt(., id = c("eez","eez_no", "eez_area")) %>% #reshape to long
+          melt(., id = c("eez","eez.num", "eez.area")) %>% #reshape to long
           mutate( #add/rename variables
-            theme = theme,
-            soot.injection.scenario = scenario,
-            years_elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
+            soot.injection.scenario = recode(
+              scenario, 
+              "cntrl" = 0,
+              "control" = 0,
+              "5Tg" = 5,
+              "16Tg" = 16,
+              "27Tg" = 27,
+              "37Tg" = 37,
+              "47Tg" = 47,
+              "150Tg" = 150
+            ),
+            years.elapsed = variable %>% str_extract(., "(?<=_)[^_]+$") %>% str_remove(., "yr") %>% as.numeric,
             indicator.raw = 
               variable %>% 
               str_extract(., "(?<=_).*?(?=_[^_]*$)"),
@@ -586,22 +611,16 @@
             indicator = 
               IndexMatchToVectorFromTibble(
                 indicator.raw, 
-                fishcatch.indicators.tb,
+                fish.catch.indicators.tb,
                 "extracted.indicator.name.raw",
                 "indicator.name.clean",
                 mult.replacements.per.cell = FALSE
-              ),
-            soot.injection.scenario = if_else(str_detect(indicator, "ctrl"), "control", soot.injection.scenario),
+              )
           ) %>%
           dcast(
             ., 
-            theme + soot.injection.scenario + eez + eez_no + eez_area + years_elapsed ~ indicator,
+            soot.injection.scenario + eez + eez.num + eez.area + years.elapsed ~ indicator,
             value.var = "value"
-          ) %>%
-          left_join( #add associated publications metadata from configs table
-            ., 
-            associated.publications.tb,
-            by = c("theme","soot.injection.scenario")
           ) %>%
           as_tibble #ensure final result is a tibble
         
@@ -611,21 +630,22 @@
         
       }
     
-    fishcatch.clean.tb <- #create final cleaned & compiled data table
+    fish.catch.clean.tb <- #create final cleaned & compiled data table
       Map(
         CleanReshape_FishCatch,
-        fishcatch.ls,
-        names(fishcatch.ls)
+        fish.catch.ls,
+        names(fish.catch.ls)
       ) %>%
       bind_rows(.) %>%
       mutate(
-        mean.pct.catch.change = mean.pct.catch.change * 10^9,
-        std.dev.pct.catch.change = std.dev.pct.catch.change * 10^9
+        mean.pct.catch.change = mean.pct.catch.change * 10^9, #initial CleanReshape function divided all values by 10^9 to get 1000s of metric tons of wet biomass, but these % variables have to be re-rescaled
+        std.dev.pct.catch.change = std.dev.pct.catch.change * 10^9,
+        eez = eez %>% gsub("Exclusive Economic Zone", "EEZ", .)
       ) %>%
       select( #select & order final variables
-        eez, eez_no, eez_area, 
-        soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
-        years_elapsed, 
+        eez, eez.num, eez.area, 
+        soot.injection.scenario,
+        years.elapsed, 
         mean.catch,  
         mean.catch.change, 
         mean.pct.catch.change, 
@@ -634,13 +654,13 @@
         std.dev.pct.catch.change
       ) 
     
-    #fishcatch.clean.tb %>%
-    #  select(
-    #    eez, eez_no, eez_area, 
-    #    soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion,
-    #    years_elapsed
-    #  ) %>%
-    #  apply(., 2, TableWithNA)
+    fish.catch.clean.tb %>%
+      select(
+        eez, eez.num, eez.area, 
+        soot.injection.scenario, 
+        years.elapsed
+      ) %>%
+      apply(., 2, TableWithNA)
     
   #6. SEA ICE ----
     
@@ -663,9 +683,9 @@
           ) %>%
           ReplaceNames(., c("variable","value"), c("month","sea.ice.thickness.meters")) %>%
           mutate(
-            months_elapsed = as.character(month) %>% gsub("\\.", "", .) %>% as.numeric %>% subtract(1),  # Clean and convert month strings
-            month = (months_elapsed - 1) %% 12 + 1,  # Calculate the month (1-12)
-            years_elapsed = (months_elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
+            months.elapsed = as.character(month) %>% gsub("\\.", "", .) %>% as.numeric %>% subtract(1),  # Clean and convert month strings
+            month = (months.elapsed - 1) %% 12 + 1,  # Calculate the month (1-12)
+            years.elapsed = (months_elapsed - 1) %/% 12 # Calculate the year (0, 1, 2, ...)
           ) %>%
           mutate(
             soot.injection.scenario = scenario %>% recode(., "46.8Tg" = "47Tg"),
@@ -685,7 +705,7 @@
           select(
             port,
             soot.injection.scenario, associated.publication_earth.system.simulation.reference, associated.publication_analysis.and.discussion, 
-            month, months_elapsed, years_elapsed, 
+            month, months_elapsed, years.elapsed, 
             indicator, 
             sea.ice.thickness.meters
           ) %>%
@@ -717,7 +737,7 @@
         "uv.clean.tb",
         "agriculture.clm.clean.tb",
         "agriculture.agmip.clean.tb",
-        "fishcatch.clean.tb",
+        "fish.catch.clean.tb",
         "sea.ice.clean.tb"
       )
     

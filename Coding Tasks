@@ -1,37 +1,47 @@
 0. OVERARCHING
-  --Rename var climate.forcing.scenario to soot.injection.scenario
+    --Rename var climate.forcing.scenario to soot.injection.scenario
+  Add country metadata: NATO member (2024), population, land area in sq. km
+  Add code to produce country-level datasets & summaries
   
 1 & 2. TEMP & PRECIP
-  --Make var climate.forcing.scenario numeric so it will order correctly
-  --Figure out time unit
-  --Convert units: 
-    --PRECC: m/s to mm/month
-    --PRECL: m/s to mm/month
-    --TS, TSMN, TSMX: kelvin to celsius
-  Create country variable using spatial join technique 
+    --Make var climate.forcing.scenario numeric so it will order correctly
+    --Figure out time unit
+    --Convert units: 
+      --PRECC: m/s to mm/month
+      --PRECL: m/s to mm/month
+      --TS, TSMN, TSMX: kelvin to celsius
+  Create country variable using spatial join technique
+  Produce 2 versions: (1) by-country, averages; (2) courser grid, working with Victoria
 
 3. UV
-  Make var climate.forcing.scenario numeric so it will order correctly
-  Verify duplicate numbers with Josh.
+    --Make var climate.forcing.scenario numeric so it will order correctly
+    --Remove associated.publications metadata
+  Verify duplicate numbers in .nc files (Josh has to upload to OSF).
 
 4A. AGRICULTURE CLM
-  Make var climate.forcing.scenario numeric so it will order correctly
-  Remove associated publications & indicator description from data table
-  Rename indicator - % change in yield
+    --Make var soot.injection.scenario numeric so it will order correctly
+    --Remove associated publications & indicator description from data table
+    --Rename measure var - % change in yield
+    --Remove 'indicator' var
+    --Lili's edits - replace column A, B, C with other spreadsheet's column A, B and C (such as corn-7). In corn-8, corn-9 and corn-10
 
 4B. AGRICULTURE AGMIP
-  Make var climate.forcing.scenario numeric so it will order correctly
-  Rename 'AGMIP' instead of 'MMA'
-  Remove associated publications & indicator description from data table
-  Rename indicator - % change in yield
+    --Make var climate.forcing.scenario numeric so it will order correctly
+    --Rename 'AGMIP' instead of 'MMA'
+    --Remove associated publications & indicator description from data table
+    --Rename indicator - % change in yield
+    --Remove 'indicator' var
 
 5. FISH CATCH
-  Make var climate.forcing.scenario numeric so it will order correctly
-  Change 'fisheries' to 'fish catch'
-  Finalize selection of unit for each var - tons? Thousands of tons?
+    --Make var climate.forcing.scenario numeric so it will order correctly
+    --Change 'fisheries' to 'fish catch'
+    --Finalize selection of unit for each var - Thousands of metric tons
+    --Make sure indicator names/definitions clear within data table (see config table 'fisheries.indicators')
+    --Remove associated.publications metadata
   
 6. SEA ICE
   Make var climate.forcing.scenario numeric so it will order correctly
+  Remove associated.publications metadata
   (low priority) Find & add control dataset
 
 
