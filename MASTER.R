@@ -65,6 +65,7 @@
     library(ncdf4)
     library(janitor)
     library(lubridate)
+    library(openxlsx)
   
   # SECTION CLOCKING
     section0.duration <- Sys.time() - section0.starttime
@@ -357,7 +358,7 @@
               "150Tg" = 150
             ),
             variable = variable %>% as.character, #convert variable made from column names of wide table from factor to character
-            year = str_extract(variable, "^[^ ]+") %>% as.numeric,  #create year variable
+            years.elapsed = str_extract(variable, "^[^ ]+") %>% as.numeric,  #create year variable
             month = str_extract(variable, "(?<= - ).*") %>% as.numeric,  #create month variable
             indicator = indicator, #create indicator variable that tells us which indicator of UV we are looking at (e.g. UVA, UVB, UV Index, etc.)
             theme = theme
@@ -381,7 +382,7 @@
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons,
             soot.injection.scenario, 
-            year, month, season.n.hemisphere, season.s.hemisphere,
+            years.elapsed, month, season.n.hemisphere, season.s.hemisphere,
             indicator, value
           ) %>% 
           ReplaceNames(., "value", "indicator.value") %>%
@@ -492,12 +493,6 @@
     CleanReshape_AgricultureAGMIP <- 
       function(source_table_list, source_table_names){
         
-        earth.system.simulation.reference  <- 
-          source_table_names %>%
-          strsplit(., "_") %>% 
-          unlist %>%
-          .[1]
-        
         scenario <- 
           source_table_names %>%
           strsplit(., "_") %>% 
@@ -510,40 +505,24 @@
           unlist %>%
           .[3]
         
-        #indicator <- "% change in harvest yield (tons/hectare)"
-        
         result <- 
           source_table_list %>% 
           ReplaceNames(., names(.),tolower(names(.))) %>% #lower-case all table names
-          select(-country_name, -country_iso3) %>%
-          ReplaceNames(., "...1", "country.id") %>%  #standardize geographic variable names
+          select(-country_name, -`...1`) %>%
+          ReplaceNames(., "country_iso3", "country.iso3") %>%  #standardize geographic variable names
           mutate(across(where(is.list), ~ suppressWarnings(as.character(unlist(.))))) %>% #convert all list variables into character
-          melt(., id = "country.id") %>% #reshape to long
+          melt(., id = "country.iso3") %>% #reshape to long
           mutate( #add/rename variables
-            earth.system.simulation.reference  = earth.system.simulation.reference ,
-            soot.injection.scenario = recode(
-              scenario, 
-              "5Tg" = 5,
-            ),
+            soot.injection.scenario = 5,
             crop = crop,
             years.elapsed = variable %>% str_extract(., "(?<=_)[^_]*$") %>% as.numeric,
-            #indicator = indicator,
             pct.change.harvest.yield = value %>% as.numeric %>% suppressWarnings()
           ) %>%
           left_join( #add country metadata from configs table
             ., 
             countries.tb,
-            by = "country.id"
+            by = "country.iso3"
           ) %>%
-          #mutate(
-          #  associated.publication_earth.system.simulation.reference = 
-          #    recode(
-          #      earth.system.simulation.reference,
-          #      "Mills"="Mills et al., 2014, “Multidecadal Global Cooling and Unprecedented Ozone Loss Following a Regional Nuclear Conflict.”",
-          #      "Bardeen"="Toon et al., 2019, “Rapidly Expanding Nuclear Arsenals in Pakistan and India Portend Regional and Global Catastrophe.”"
-          #    ),
-          #  associated.publication_analysis.and.discussion = "Jagermeyr et al., 2020, “A Regional Nuclear Conflict Would Compromise Global Food Security.”"
-          #) %>%
           select( #select & order final variables
             country.id, country.name, country.iso3,	country.hemisphere,	
             country.region,	country.sub.region,	country.intermediate.region, country.nuclear.weapons, 
@@ -605,7 +584,7 @@
             indicator.raw = 
               variable %>% 
               str_extract(., "(?<=_).*?(?=_[^_]*$)"),
-            value = value %>% divide_by(1000000000),
+            value = value %>% divide_by(10^9),
           ) %>%
           mutate(
             indicator = 
@@ -640,7 +619,8 @@
       mutate(
         mean.pct.catch.change = mean.pct.catch.change * 10^9, #initial CleanReshape function divided all values by 10^9 to get 1000s of metric tons of wet biomass, but these % variables have to be re-rescaled
         std.dev.pct.catch.change = std.dev.pct.catch.change * 10^9,
-        eez = eez %>% gsub("Exclusive Economic Zone", "EEZ", .)
+        eez = eez %>% gsub("Exclusive Economic Zone", "EEZ", .),
+        mean.catch.per.sq.km = mean.catch/eez.area
       ) %>%
       select( #select & order final variables
         eez, eez.num, eez.area, 
@@ -654,13 +634,13 @@
         std.dev.pct.catch.change
       ) 
     
-    fish.catch.clean.tb %>%
-      select(
-        eez, eez.num, eez.area, 
-        soot.injection.scenario, 
-        years.elapsed
-      ) %>%
-      apply(., 2, TableWithNA)
+    #fish.catch.clean.tb %>%
+    #  select(
+    #    eez, eez.num, eez.area, 
+    #    soot.injection.scenario, 
+    #    years.elapsed
+    #  ) %>%
+    #  apply(., 2, TableWithNA)
     
   #6. SEA ICE ----
     
@@ -695,7 +675,6 @@
                 "150Tg" = 150
               ),
             theme = theme,
-            indicator = "avg. thickness (m)"
           ) %>%
           left_join( #add months metadata (seasons in n & s hemisphere)
             ., 
@@ -798,6 +777,28 @@
       export.ls,
       names(export.ls)
     )
+    
+  # WRITE TABLES INTO SINGLE EXCEL FILE IN OUTPUT DIRECTORY
+    
+    output.file.path <- 
+      paste(output.dir, "Reformatted Data_Analysis_",Sys.Date(),".xlsx", sep = "") %>%
+      file.path(.)
+      
+    wb <- createWorkbook()
+    
+    for (i in seq_along(export.ls)) {
+      sheet_name <- names(export.ls)[i]  # Get the name of the list element (if named)
+      if (is.null(sheet_name) || sheet_name == "") {
+        sheet_name <- paste0("Sheet", i)  # Assign default sheet names if missing
+      }
+      
+      addWorksheet(wb, sheet_name)  # Create a new sheet
+      writeData(wb, sheet = sheet_name, export.ls[[i]])  # Write data
+    }
+    
+    saveWorkbook(wb, output.file.path, overwrite = TRUE)
+    
+    cat("Excel file successfully saved at:", output.file.path, "\n") # Print confirmation
 
   # CODE CLOCKING
     code.duration <- Sys.time() - sections.all.starttime

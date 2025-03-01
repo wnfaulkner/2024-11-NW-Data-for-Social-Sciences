@@ -2,6 +2,7 @@
     --Rename var climate.forcing.scenario to soot.injection.scenario
   Add country metadata: NATO member (2024), population, land area in sq. km
   Add code to produce country-level datasets & summaries
+  For monthly data, ensure 'season' added to all tables but with number in front so it orders correctly
   
 1 & 2. TEMP & PRECIP
     --Make var climate.forcing.scenario numeric so it will order correctly
@@ -16,6 +17,8 @@
 3. UV
     --Make var climate.forcing.scenario numeric so it will order correctly
     --Remove associated.publications metadata
+  Add months_elapsed variable
+    --Change vavr name from years to years.elapsed
   Verify duplicate numbers in .nc files (Josh has to upload to OSF).
 
 4A. AGRICULTURE CLM
@@ -38,6 +41,7 @@
     --Finalize selection of unit for each var - Thousands of metric tons
     --Make sure indicator names/definitions clear within data table (see config table 'fisheries.indicators')
     --Remove associated.publications metadata
+  Add indicator: mean catch per km2
   
 6. SEA ICE
     --Make var climate.forcing.scenario numeric so it will order correctly
