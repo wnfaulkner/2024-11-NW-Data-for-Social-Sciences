@@ -368,11 +368,6 @@
             countries.tb,
             by = "country.id"
           ) %>%
-          #left_join( #add associated publications metadata from configs table
-          #  ., 
-          #  associated.publications.tb,
-          #  by = c("theme","soot.injection.scenario")
-          #) %>%
           left_join( #add months metadata (seasons in n & s hemisphere)
             ., 
             months.metadata.tb,
